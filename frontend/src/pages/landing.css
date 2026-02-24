@@ -1,0 +1,84 @@
+:root {
+  --brand-blue: #1e40af;
+  --text-dark: #0f172a;
+}
+.landing {
+  height: 100vh;
+  width: 100vw;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #ffffff;
+  cursor: pointer;
+}
+.landing-content {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  justify-content: center;
+  transform: scale(0.96);
+  transform-origin: left center;
+  opacity: 0;
+}
+.landing.enter .landing-content {
+  transform: scale(1);
+  opacity: 1;
+  transition: transform 1400ms cubic-bezier(0.22, 1, 0.36, 1), opacity 1400ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+/* spacing handled via title-block margin for smoother animation */
+.landing .seal {
+  width: 180px;
+  height: 180px;
+  object-fit: contain;
+  user-select: none;
+}
+.landing .title-block {
+  display: flex;
+  flex-direction: column;
+  transition: transform 1200ms cubic-bezier(0.22, 1, 0.36, 1), opacity 1200ms cubic-bezier(0.22, 1, 0.36, 1), margin-left 1200ms cubic-bezier(0.22, 1, 0.36, 1);
+  opacity: 0;
+  transform: scale(0.96);
+  margin-left: 0;
+  width: 0;
+  overflow: hidden;
+}
+.landing .brand {
+  font-size: 100px;
+  font-weight: 800;
+  letter-spacing: 2px;
+  color: var(--brand-blue);
+  line-height: 0.85;
+}
+.landing:hover .title-block {
+  transform: scale(1);
+  transform-origin: left center;
+  opacity: 1;
+  margin-left: 24px;
+  width: max-content;
+}
+.landing:hover .landing-content {
+  justify-content: flex-start;
+}
+.landing .sub {
+  margin-top: 8px;
+  font-size: 16px;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  color: #1e3a8a;
+  opacity: 1;
+}
+.landing .sub.top {
+  margin-top: 2px;
+}
+.landing .sub.bottom {
+  margin-top: 0;
+}
+.hint {
+  position: fixed;
+  bottom: 24px;
+  left: 0;
+  right: 0;
+  text-align: center;
+  color: #334155;
+  font-size: 13px;
+}
