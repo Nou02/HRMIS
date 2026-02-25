@@ -8,10 +8,29 @@ import Payslips from './pages/Compensation/Payslips';
 import TimeKeeping from './pages/Compensation/TimeKeeping';
 import ReportsTimeKeeping from './pages/Reports/ReportsTimeKeeping';
 import ReportsCompensation from './pages/Reports/ReportsCompensation';
+import Landing from './pages/Landing';
+import Login from './pages/Login';
 import './index.css';
 
 function App() {
   const [active, setActive] = useState('employees');
+  const [showLanding, setShowLanding] = useState(true);
+  const [showLogin, setShowLogin] = useState(false);
+
+  if (showLanding) {
+    return (
+      <Landing
+        onEnter={() => {
+          setShowLanding(false);
+          setShowLogin(true);
+        }}
+      />
+    );
+  }
+
+  if (showLogin) {
+    return <Login onLogin={() => setShowLogin(false)} />;
+  }
 
   return (
     <div>

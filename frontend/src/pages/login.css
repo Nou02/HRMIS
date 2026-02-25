@@ -3,11 +3,11 @@
   background: #ffffff;
   overflow: hidden;
 }
-.stage {
+.login .stage {
   position: relative;
   height: 100%;
 }
-.hero {
+.login .hero {
   position: absolute;
   left: 50%;
   top: 50%;
@@ -21,37 +21,37 @@
 .login.enter .hero {
   transform: translate(calc(-50% - 22vw), -50%);
 }
-.seal {
+.login .seal {
   width: 180px;
   height: 180px;
   object-fit: contain;
   user-select: none;
 }
-.title-block {
+.login .title-block {
   display: flex;
   flex-direction: column;
 }
-.brand {
+.login .brand {
   font-size: 100px;
   font-weight: 800;
   letter-spacing: 2px;
   color: #1e40af;
   line-height: 0.85;
 }
-.sub {
+.login .sub {
   margin-top: 8px;
   font-size: 16px;
   letter-spacing: 1.2px;
   text-transform: uppercase;
   color: #1e3a8a;
 }
-.sub.top {
+.login .sub.top {
   margin-top: 2px;
 }
-.sub.bottom {
+.login .sub.bottom {
   margin-top: 0;
 }
-.card {
+.login .card {
   position: absolute;
   right: 12%;
   top: 50%;
@@ -69,29 +69,29 @@
   transform: translateY(-50%) translateX(0px);
   opacity: 1;
 }
-.title {
+.login .title {
   font-size: 20px;
   font-weight: 700;
   color: #0f172a;
   margin-bottom: 12px;
 }
-.form {
+.login .form {
   display: grid;
   gap: 12px;
 }
-.form label {
+.login .form label {
   display: grid;
   gap: 8px;
   color: #334155;
   font-size: 13px;
 }
-.form input {
+.login .form input {
   padding: 10px 12px;
   border: 1px solid #cbd5e1;
   border-radius: 8px;
   font-size: 14px;
 }
-.form button {
+.login .form button {
   margin-top: 8px;
   padding: 10px 12px;
   border-radius: 8px;
@@ -101,6 +101,6 @@
   font-weight: 600;
   cursor: pointer;
 }
-.form button:hover {
+.login .form button:hover {
   background: #1d4ed8;
 }
