@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import './login.css';
 
-export default function Login() {
+export default function Login({ onLogin }) {
   const [enter, setEnter] = useState(false);
   useEffect(() => {
     const t = setTimeout(() => setEnter(true), 50);
@@ -26,7 +26,13 @@ export default function Login() {
         </div>
         <div className="card">
           <div className="title">Login</div>
-          <form className="form" onSubmit={(e) => e.preventDefault()}>
+          <form
+            className="form"
+            onSubmit={(e) => {
+              e.preventDefault();
+              onLogin?.();
+            }}
+          >
             <label>
               <span>Username</span>
               <input type="text" placeholder="Enter username" />
