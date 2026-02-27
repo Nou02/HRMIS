@@ -12,7 +12,7 @@ function Item({ label, id, level = 0, active, onNavigate }) {
   );
 }
 
-export default function Sidebar({ active, onNavigate }) {
+export default function Sidebar({ active, onNavigate, onLogout }) {
   const [open201, setOpen201] = useState(true);
   const [openComp, setOpenComp] = useState(false);
   const [openReports, setOpenReports] = useState(false);
@@ -55,6 +55,9 @@ export default function Sidebar({ active, onNavigate }) {
           <Item label="Compensation" id="reports-comp" level={1} active={active} onNavigate={onNavigate} />
         </div>
       )}
+      <div className="sidebar-footer">
+        <button className="logout-button" onClick={onLogout}>Log out</button>
+      </div>
     </aside>
   );
 }
