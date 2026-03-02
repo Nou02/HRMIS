@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import './compensation.css';
+import { API_BASE } from '../../lib/api';
 
 export default function GeneralPayroll() {
   const [period, setPeriod] = useState('');
@@ -22,7 +23,7 @@ export default function GeneralPayroll() {
   });
 
   React.useEffect(() => {
-    fetch('http://localhost:5174/api/payroll/summary')
+    fetch(`${API_BASE}/api/payroll/summary`)
       .then((r) => r.json())
       .then(setSummary)
       .catch(() => {});
@@ -31,13 +32,13 @@ export default function GeneralPayroll() {
     const params = new URLSearchParams();
     if (query) params.set('q', query);
     if (nameSortAZ) params.set('sort', 'name_asc');
-    fetch(`http://localhost:5174/api/payroll/records${params.toString() ? `?${params.toString()}` : ''}`)
+    fetch(`${API_BASE}/api/payroll/records${params.toString() ? `?${params.toString()}` : ''}`)
       .then((r) => r.json())
       .then((list) => {
         if (Array.isArray(list) && list.length > 0) {
           setRecords(list);
         } else {
-          fetch('http://localhost:5174/api/employees')
+          fetch(`${API_BASE}/api/employees`)
             .then((r) => r.json())
             .then((emps) => {
               const rows = (emps || []).map((e) => ({
@@ -74,17 +75,17 @@ export default function GeneralPayroll() {
           <div className="card-title">Payroll Processing Setup</div>
           <div className="card-actions">
             <button className="btn primary" onClick={() => {
-              fetch('http://localhost:5174/api/payroll/generate', { method: 'POST' })
+              fetch(`${API_BASE}/api/payroll/generate`, { method: 'POST' })
                 .then((r) => r.json())
                 .then(() => {
-                  fetch('http://localhost:5174/api/payroll/summary')
+                  fetch(`${API_BASE}/api/payroll/summary`)
                     .then((r) => r.json())
                     .then(setSummary)
                     .catch(() => {});
                   const params = new URLSearchParams();
                   if (query) params.set('q', query);
                   if (nameSortAZ) params.set('sort', 'name_asc');
-                  fetch(`http://localhost:5174/api/payroll/records${params.toString() ? `?${params.toString()}` : ''}`)
+                  fetch(`${API_BASE}/api/payroll/records${params.toString() ? `?${params.toString()}` : ''}`)
                     .then((r) => r.json())
                     .then(setRecords)
                     .catch(() => {});

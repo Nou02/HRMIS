@@ -1,5 +1,6 @@
 import React from 'react';
 import '../Compensation/compensation.css';
+import { API_BASE } from '../../lib/api';
 
 export default function ReportsCompensation() {
   const [view, setView] = React.useState(null);
@@ -8,13 +9,13 @@ export default function ReportsCompensation() {
 
   React.useEffect(() => {
     if (view === 'payroll') {
-      fetch('http://localhost:5174/api/payroll/records?only_generated=true')
+      fetch(`${API_BASE}/api/payroll/records?only_generated=true`)
         .then((r) => r.json())
         .then(setPayroll)
         .catch(() => setPayroll([]));
     }
     if (view === 'payslips') {
-      fetch('http://localhost:5174/api/payslips?only_confirmed=true')
+      fetch(`${API_BASE}/api/payslips?only_confirmed=true`)
         .then((r) => r.json())
         .then(setPayslips)
         .catch(() => setPayslips([]));

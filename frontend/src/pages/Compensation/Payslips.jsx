@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import './compensation.css';
+import { API_BASE } from '../../lib/api';
 
 export default function Payslips() {
   const [query, setQuery] = useState('');
@@ -18,7 +19,7 @@ export default function Payslips() {
   });
 
   const loadSummary = () => {
-    fetch('http://localhost:5174/api/payroll/summary')
+    fetch(`${API_BASE}/api/payroll/summary`)
       .then((r) => r.json())
       .then(setSummary)
       .catch(() => {});
@@ -27,13 +28,13 @@ export default function Payslips() {
     const params = new URLSearchParams();
     if (query) params.set('q', query);
     if (sortNameAZ) params.set('sort', 'name_asc');
-    fetch(`http://localhost:5174/api/payslips${params.toString() ? `?${params.toString()}` : ''}`)
+    fetch(`${API_BASE}/api/payslips${params.toString() ? `?${params.toString()}` : ''}`)
       .then((r) => r.json())
       .then((list) => {
         if (Array.isArray(list) && list.length > 0) {
           setList(list);
         } else {
-          fetch('http://localhost:5174/api/employees')
+          fetch(`${API_BASE}/api/employees`)
             .then((r) => r.json())
             .then((emps) => {
               const rows = (emps || []).map((e) => ({
@@ -74,7 +75,7 @@ export default function Payslips() {
   }
   function confirmPayslip(e) {
     e.preventDefault();
-    fetch(`http://localhost:5174/api/payslips/${encodeURIComponent(form.uid)}`, {
+    fetch(`${API_BASE}/api/payslips/${encodeURIComponent(form.uid)}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({

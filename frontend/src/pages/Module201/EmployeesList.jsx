@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import './module201.css';
+import { API_BASE } from '../../lib/api';
 
 export default function EmployeesList() {
   const [query, setQuery] = useState('');
@@ -26,7 +27,7 @@ export default function EmployeesList() {
     if (query) params.set('q', query);
     if (nameSortAZ) params.set('sort', 'name_asc');
     if (sortDeptAZ) params.set('sort', 'department_asc');
-    const url = `http://localhost:5174/api/employees${params.toString() ? `?${params.toString()}` : ''}`;
+    const url = `${API_BASE}/api/employees${params.toString() ? `?${params.toString()}` : ''}`;
     fetch(url)
       .then((r) => r.json())
       .then(setEmployees)
@@ -35,7 +36,7 @@ export default function EmployeesList() {
 
   const [stats, setStats] = useState(null);
   const loadStats = () => {
-    fetch('http://localhost:5174/api/stats')
+    fetch(`${API_BASE}/api/stats`)
       .then((r) => r.json())
       .then(setStats)
       .catch(() => {});
@@ -90,8 +91,8 @@ export default function EmployeesList() {
     if (form.pdsFile) fd.append('pdsFile', form.pdsFile);
     if (form.idFile) fd.append('idFile', form.idFile);
     const url = editingUid
-      ? `http://localhost:5174/api/employees/${encodeURIComponent(editingUid)}`
-      : 'http://localhost:5174/api/employees';
+      ? `${API_BASE}/api/employees/${encodeURIComponent(editingUid)}`
+      : `${API_BASE}/api/employees`;
     fetch(url, {
       method: editingUid ? 'PUT' : 'POST',
       body: fd,
@@ -177,8 +178,8 @@ export default function EmployeesList() {
                 </div>
                 <div>{e.departmentProject}</div>
                 <div>{Array.isArray(e.certifications) ? e.certifications.join(', ') : e.certifications}</div>
-                <div>{e.pdsFilePath ? <a href={`http://localhost:5174${e.pdsFilePath}`} target="_blank" rel="noreferrer">View</a> : '-'}</div>
-                <div>{e.idFilePath ? <a href={`http://localhost:5174${e.idFilePath}`} target="_blank" rel="noreferrer">View</a> : '-'}</div>
+                <div>{e.pdsFilePath ? <a href={`${API_BASE}${e.pdsFilePath}`} target="_blank" rel="noreferrer">View</a> : '-'}</div>
+                <div>{e.idFilePath ? <a href={`${API_BASE}${e.idFilePath}`} target="_blank" rel="noreferrer">View</a> : '-'}</div>
                 <div><button className="btn small" onClick={() => openEdit(e)}>Edit</button></div>
               </div>
             );
