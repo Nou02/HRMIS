@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import './compensation.css';
+import { API_BASE } from '../../lib/api';
 
 export default function TimeKeeping() {
   const [query, setQuery] = useState('');
@@ -25,7 +26,7 @@ export default function TimeKeeping() {
   });
 
   React.useEffect(() => {
-    fetch('http://localhost:5174/api/timekeeping/summary')
+    fetch(`${API_BASE}/api/timekeeping/summary`)
       .then((r) => r.json())
       .then(setSummary)
       .catch(() => {});
@@ -36,7 +37,7 @@ export default function TimeKeeping() {
     if (query) params.set('q', query);
     if (sortNameAZ) params.set('sort', 'name_asc');
     if (statusFilter) params.set('status', statusFilter);
-    fetch(`http://localhost:5174/api/timekeeping${params.toString() ? `?${params.toString()}` : ''}`)
+    fetch(`${API_BASE}/api/timekeeping${params.toString() ? `?${params.toString()}` : ''}`)
       .then((r) => r.json())
       .then(setRecords)
       .catch(() => setRecords([]));
@@ -50,7 +51,7 @@ export default function TimeKeeping() {
 
   function submitForm(e) {
     e.preventDefault();
-    fetch('http://localhost:5174/api/timekeeping', {
+    fetch(`${API_BASE}/api/timekeeping`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(form),
@@ -60,7 +61,7 @@ export default function TimeKeeping() {
         setModalOpen(false);
         setForm({ uid: '', name: '', clockIn: '', clockOut: '', status: 'Present' });
         loadRecords();
-        fetch('http://localhost:5174/api/timekeeping/summary')
+        fetch(`${API_BASE}/api/timekeeping/summary`)
           .then((r) => r.json())
           .then(setSummary)
           .catch(() => {});

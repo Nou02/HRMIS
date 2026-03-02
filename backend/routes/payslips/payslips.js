@@ -1,17 +1,19 @@
 const express = require('express');
 
-module.exports = (state) => {
+module.exports = (state, db) => {
   const router = express.Router();
-  const { payslips, employees } = state;
+  const { payslips } = state;
 
-  router.get('/', (req, res) => {
+  router.get('/', async (req, res) => {
     const q = (req.query.q || '').toString().toLowerCase();
     const sort = (req.query.sort || '').toString();
     const onlyConfirmed = String(req.query.only_confirmed || '').toLowerCase() === 'true';
-    let list = payslips.length
-      ? payslips.slice()
-      : employees.map((e) => ({
-          id: e.uid,
+    let list = payslips.length ? payslips.slice() : [];
+    if (!list.length && !onlyConfirmed) {
+      try {
+        const [ers] = await db.query(`SELECT uid AS id, uid, name FROM employees`);
+        list = ers.map((e) => ({
+          id: e.id,
           uid: e.uid,
           name: e.name,
           role: '',
@@ -22,6 +24,10 @@ module.exports = (state) => {
           period: '—',
           status: 'Draft',
         }));
+      } catch (_e) {
+        list = [];
+      }
+    }
     if (onlyConfirmed) {
       list = list.filter((p) => (p.status || '').toLowerCase() === 'confirmed');
     }

@@ -1,5 +1,6 @@
 import React from 'react';
 import './module201.css';
+import { API_BASE } from '../../lib/api';
 
 function Metric({ label, value }) {
   return (
@@ -32,7 +33,7 @@ export default function GatePass() {
     if (query) params.set('q', query);
     if (sortNameAZ) params.set('sort', 'name_asc');
     params.set('sort', 'date_desc');
-    const url = `http://localhost:5174/api/gatepasses${params.toString() ? `?${params.toString()}` : ''}`;
+    const url = `${API_BASE}/api/gatepasses${params.toString() ? `?${params.toString()}` : ''}`;
     fetch(url)
       .then((r) => r.json())
       .then(setList)
@@ -77,7 +78,7 @@ export default function GatePass() {
     e.preventDefault();
     const payload = { ...form };
     if (!editingId) {
-      fetch('http://localhost:5174/api/gatepasses', {
+      fetch(`${API_BASE}/api/gatepasses`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -89,7 +90,7 @@ export default function GatePass() {
         })
         .catch(() => {});
     } else {
-      fetch(`http://localhost:5174/api/gatepasses/${encodeURIComponent(editingId)}`, {
+      fetch(`${API_BASE}/api/gatepasses/${encodeURIComponent(editingId)}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -104,7 +105,7 @@ export default function GatePass() {
   };
 
   const approve = (row) => {
-    fetch(`http://localhost:5174/api/gatepasses/${encodeURIComponent(row.id)}`, {
+    fetch(`${API_BASE}/api/gatepasses/${encodeURIComponent(row.id)}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ status: 'Approved' }),

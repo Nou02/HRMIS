@@ -1,21 +1,21 @@
 const express = require('express');
-
-module.exports = (state) => {
+module.exports = (db) => {
   const router = express.Router();
-  router.get('/', (_req, res) => {
-    const { employees } = state;
-    const jobOrderCount = employees.filter((e) => e.employmentCategory === 'Job Order').length;
-    const regularEmployeeCount = employees.filter((e) => e.employmentCategory === 'Regular Employees').length;
-    const technicalOpsDivisions = employees.filter((e) => e.employmentCategory === 'Technical Operations Divisions').length;
-    const adminCount = employees.filter((e) => e.employmentCategory === 'Admin').length;
-    const totalEmployees = employees.length;
-    res.json({
-      jobOrderCount,
-      regularEmployeeCount,
-      technicalOpsDivisions,
-      adminCount,
-      totalEmployees,
-    });
+  router.get('/', async (_req, res) => {
+    try {
+      const [rows] = await db.query(`
+        SELECT
+          SUM(CASE WHEN employment_category='Job Order' THEN 1 ELSE 0 END) AS jobOrderCount,
+          SUM(CASE WHEN employment_category='Regular Employees' THEN 1 ELSE 0 END) AS regularEmployeeCount,
+          SUM(CASE WHEN employment_category='Technical Operations Divisions' THEN 1 ELSE 0 END) AS technicalOpsDivisions,
+          SUM(CASE WHEN employment_category='Admin' THEN 1 ELSE 0 END) AS adminCount,
+          COUNT(*) AS totalEmployees
+        FROM employees
+      `);
+      res.json(rows[0] || {});
+    } catch (_e) {
+      res.json({ jobOrderCount: 0, regularEmployeeCount: 0, technicalOpsDivisions: 0, adminCount: 0, totalEmployees: 0 });
+    }
   });
   return router;
 };

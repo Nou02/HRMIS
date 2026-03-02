@@ -1,8 +1,8 @@
 const express = require('express');
 
-module.exports = (state) => {
+module.exports = (state, db) => {
   const router = express.Router();
-  const { timekeepingRecords, employees } = state;
+  const { timekeepingRecords } = state;
 
   router.get('/summary', (_req, res) => {
     const totalAttendance = timekeepingRecords.length || employees.length;
@@ -25,13 +25,15 @@ module.exports = (state) => {
     });
   });
 
-  router.get('/', (req, res) => {
+  router.get('/', async (req, res) => {
     const q = (req.query.q || '').toString().toLowerCase();
     const sort = (req.query.sort || '').toString();
     const status = (req.query.status || '').toString();
-    let list = timekeepingRecords.length
-      ? timekeepingRecords.slice()
-      : employees.map((e) => ({
+    let list = timekeepingRecords.length ? timekeepingRecords.slice() : [];
+    if (!list.length) {
+      try {
+        const [ers] = await db.query(`SELECT uid, name FROM employees`);
+        list = ers.map((e) => ({
           uid: e.uid,
           name: e.name,
           clockIn: '-',
@@ -42,6 +44,10 @@ module.exports = (state) => {
           status: 'Absent',
           statusClass: 'draft',
         }));
+      } catch (_e) {
+        list = [];
+      }
+    }
     if (status) {
       list = list.filter((r) => (r.status || '') === status);
     }

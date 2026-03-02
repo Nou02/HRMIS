@@ -1,8 +1,8 @@
 const express = require('express');
 
-module.exports = (state) => {
+module.exports = (state, db) => {
   const router = express.Router();
-  const { payrollRecords, employees } = state;
+  const { payrollRecords } = state;
 
   router.get('/summary', (_req, res) => {
     const totalEmployees = payrollRecords.length || employees.length;
@@ -16,15 +16,17 @@ module.exports = (state) => {
     });
   });
 
-  router.get('/records', (req, res) => {
+  router.get('/records', async (req, res) => {
     const q = (req.query.q || '').toString().toLowerCase();
     const sort = (req.query.sort || '').toString();
     const onlyGenerated = String(req.query.only_generated || '').toLowerCase() === 'true';
-    let list = payrollRecords.length
-      ? payrollRecords.slice()
-      : employees.map((e) => ({
-          employeeId: e.uid,
-          employeeName: e.name,
+    let list = payrollRecords.length ? payrollRecords.slice() : [];
+    if (!list.length) {
+      try {
+        const [ers] = await db.query(`SELECT uid AS employeeId, name AS employeeName FROM employees`);
+        list = ers.map((e) => ({
+          employeeId: e.employeeId,
+          employeeName: e.employeeName,
           baseSalary: '-',
           overtime: '-',
           deduction: '-',
@@ -32,6 +34,10 @@ module.exports = (state) => {
           status: 'Draft',
           statusClass: 'draft',
         }));
+      } catch (_e) {
+        list = [];
+      }
+    }
     if (q) {
       list = list.filter(
         (r) =>
@@ -48,22 +54,26 @@ module.exports = (state) => {
     res.json(list);
   });
 
-  router.post('/generate', (_req, res) => {
+  router.post('/generate', async (_req, res) => {
     payrollRecords.length = 0;
-    const count = employees.length;
-    employees.forEach((e) => {
-      payrollRecords.push({
-        employeeId: e.uid,
-        employeeName: e.name,
-        baseSalary: '-',
-        overtime: '-',
-        deduction: '-',
-        netPay: '-',
-        status: 'Generated',
-        statusClass: 'approved',
+    try {
+      const [ers] = await db.query(`SELECT uid AS employeeId, name AS employeeName FROM employees`);
+      ers.forEach((e) => {
+        payrollRecords.push({
+          employeeId: e.employeeId,
+          employeeName: e.employeeName,
+          baseSalary: '-',
+          overtime: '-',
+          deduction: '-',
+          netPay: '-',
+          status: 'Generated',
+          statusClass: 'approved',
+        });
       });
-    });
-    res.json({ ok: true, count });
+      res.json({ ok: true, count: ers.length });
+    } catch (_e) {
+      res.json({ ok: true, count: 0 });
+    }
   });
 
   router.put('/records/:employeeId', (req, res) => {

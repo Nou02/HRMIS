@@ -1,3 +1,4 @@
+require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
@@ -22,18 +23,21 @@ app.use('/uploads', express.static(uploadDir));
 
 // Shared state across routes
 const state = require('./state');
+const db = require('./db');
 
 // Routes by module
-const dashboardRouter = require('./routes/dashboard/stats')(state);
-const employeesRouter = require('./routes/employees/employees')(upload, state);
+const healthRouter = require('./routes/health/db')(db);
+const dashboardRouter = require('./routes/dashboard/stats')(db);
+const employeesRouter = require('./routes/employees/employees')(upload, db);
 const applicationsRouter = require('./routes/applications/applications')(state);
 const gatepassesRouter = require('./routes/gatepasses/gatepasses')(state);
-const payrollRouter = require('./routes/payroll/payroll')(state);
-const payslipsRouter = require('./routes/payslips/payslips')(state);
-const timekeepingRouter = require('./routes/timekeeping/timekeeping')(state);
+const payrollRouter = require('./routes/payroll/payroll')(state, db);
+const payslipsRouter = require('./routes/payslips/payslips')(state, db);
+const timekeepingRouter = require('./routes/timekeeping/timekeeping')(state, db);
 const landingRouter = require('./routes/landing/landing')();
 
 app.use('/api/stats', dashboardRouter);
+app.use('/api/health', healthRouter);
 app.use('/api/landing', landingRouter);
 app.use('/api/employees', employeesRouter);
 app.use('/api/applications', applicationsRouter);
