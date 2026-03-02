@@ -52,7 +52,7 @@ export default function ReportsCompensation() {
               <button className="btn light" onClick={() => setView(null)}>Back</button>
             </div>
           </div>
-          <div className="table">
+          <div className="table reports-payroll-table">
             <div className="thead">
               <div>Employee ID</div>
               <div>Employee Name</div>
@@ -88,7 +88,7 @@ export default function ReportsCompensation() {
               <button className="btn light" onClick={() => setView(null)}>Back</button>
             </div>
           </div>
-          <div className="table">
+          <div className="table reports-payslip-table">
             <div className="thead">
               <div>UID</div>
               <div>Name</div>

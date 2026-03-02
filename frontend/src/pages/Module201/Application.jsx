@@ -136,7 +136,7 @@ export default function Application() {
             </div>
           </div>
         )}
-        <div className="table">
+        <div className="table applications-table">
           <div className="thead">
             <div>UID</div>
             <div>Name</div>

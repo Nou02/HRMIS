@@ -8,26 +8,28 @@ module.exports = (state, db) => {
     const q = (req.query.q || '').toString().toLowerCase();
     const sort = (req.query.sort || '').toString();
     const onlyConfirmed = String(req.query.only_confirmed || '').toLowerCase() === 'true';
-    let list = payslips.length ? payslips.slice() : [];
-    if (!list.length && !onlyConfirmed) {
-      try {
-        const [ers] = await db.query(`SELECT uid AS id, uid, name FROM employees`);
-        list = ers.map((e) => ({
-          id: e.id,
-          uid: e.uid,
-          name: e.name,
-          role: '',
-          gross: '—',
-          bonus: '—',
-          deductions: '—',
-          netPay: '—',
-          period: '—',
-          status: 'Draft',
-        }));
-      } catch (_e) {
-        list = [];
-      }
-    }
+    const [ers] = await db.query(`SELECT uid AS id, uid, name FROM employees`);
+    const byUid = {};
+    payslips.forEach((p) => {
+      byUid[p.uid] = p;
+    });
+    let list = ers.map((e) => {
+      const cur = byUid[e.uid];
+      if (cur) return cur;
+      return {
+        id: e.id,
+        uid: e.uid,
+        name: e.name,
+        role: '',
+        gross: '—',
+        bonus: '—',
+        deductions: '—',
+        netPay: '—',
+        period: '—',
+        status: 'Draft',
+        statusClass: 'draft',
+      };
+    });
     if (onlyConfirmed) {
       list = list.filter((p) => (p.status || '').toLowerCase() === 'confirmed');
     }

@@ -144,7 +144,7 @@ export default function EmployeesList() {
             <button className="btn light" onClick={() => setFiltersOpen((v) => !v)}>Advanced filters</button>
           </div>
         </div>
-        <div className="table">
+        <div className="table employees-table">
           <div className="thead">
             <div>UID</div>
             <div>Name</div>
