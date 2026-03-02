@@ -1,32 +1,6 @@
 const express = require('express');
-const fs = require('fs');
-const path = require('path');
-
 module.exports = (upload, db) => {
   const router = express.Router();
-  const USE_DB = String(process.env.BACKEND_USE_DB || process.env.USE_DB || 'true').toLowerCase() === 'true';
-  const dataDir = path.join(__dirname, '../../data');
-  const fallbackFile = path.join(dataDir, 'fallback_employees.json');
-  function readFallback() {
-    try {
-      if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir);
-      if (!fs.existsSync(fallbackFile)) fs.writeFileSync(fallbackFile, '[]');
-      const raw = fs.readFileSync(fallbackFile, 'utf-8');
-      const list = JSON.parse(raw);
-      return Array.isArray(list) ? list : [];
-    } catch (_e) {
-      return [];
-    }
-  }
-  function writeFallback(list) {
-    try {
-      if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir);
-      fs.writeFileSync(fallbackFile, JSON.stringify(list, null, 2));
-      return true;
-    } catch (_e) {
-      return false;
-    }
-  }
   async function ensureEmployeesTable() {
     await db.query(`
       CREATE TABLE IF NOT EXISTS employees (
@@ -47,9 +21,6 @@ module.exports = (upload, db) => {
     `);
   }
   router.get('/', async (req, res) => {
-    if (!USE_DB) {
-      return res.json(readFallback());
-    }
     const q = (req.query.q || '').toString();
     const sort = (req.query.sort || '').toString();
     let orderBy = '';
@@ -69,60 +40,11 @@ module.exports = (upload, db) => {
         certifications: r.certifications || '',
       })));
     } catch (_e) {
-      try {
-        const dataDir = path.join(__dirname, '../../data');
-        const fallbackFile = path.join(dataDir, 'fallback_employees.json');
-        if (fs.existsSync(fallbackFile)) {
-          const raw = fs.readFileSync(fallbackFile, 'utf-8');
-          const list = JSON.parse(raw);
-          res.json(Array.isArray(list) ? list : []);
-        } else {
-          res.json([]);
-        }
-      } catch (_ee) {
-        res.json([]);
-      }
+      res.status(500).json({ error: 'db_error' });
     }
   });
 
   router.post('/', upload.fields([{ name: 'pdsFile', maxCount: 1 }, { name: 'idFile', maxCount: 1 }]), async (req, res) => {
-    if (!USE_DB) {
-      const {
-        uid,
-        name,
-        departmentProject,
-        employmentCategory,
-        certifications = '',
-        pdsAvailable = false,
-        idViewAvailable = false,
-        avatarUrl = '',
-      } = req.body || {};
-      if (!uid || !name) {
-        return res.status(400).json({ error: 'uid and name are required' });
-      }
-      const pdsFile = req.files?.pdsFile?.[0];
-      const idFile = req.files?.idFile?.[0];
-      const list = readFallback();
-      const emp = {
-        uid,
-        name,
-        departmentProject: departmentProject || '',
-        employmentCategory: employmentCategory || '',
-        certifications: Array.isArray(certifications)
-          ? certifications
-          : String(certifications || '').split(',').map((s) => s.trim()).filter(Boolean),
-        pdsAvailable: pdsFile ? true : !!pdsAvailable,
-        idViewAvailable: idFile ? true : !!idViewAvailable,
-        pdsFilePath: pdsFile ? `/uploads/${pdsFile.filename}` : null,
-        idFilePath: idFile ? `/uploads/${idFile.filename}` : null,
-        avatarUrl,
-      };
-      const idx = list.findIndex((r) => r.uid === uid);
-      if (idx !== -1) return res.status(409).json({ error: 'Employee with uid already exists' });
-      list.push(emp);
-      writeFallback(list);
-      return res.status(201).json(emp);
-    }
     const {
       uid,
       name,
@@ -163,71 +85,12 @@ module.exports = (upload, db) => {
       );
       res.status(201).json(rows[0] || {});
     } catch (e) {
-      try {
-        const dataDir = path.join(__dirname, '../../data');
-        if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir);
-        const fallbackFile = path.join(dataDir, 'fallback_employees.json');
-        const raw = fs.existsSync(fallbackFile) ? fs.readFileSync(fallbackFile, 'utf-8') : '[]';
-        const list = JSON.parse(raw);
-        const emp = {
-          uid,
-          name,
-          departmentProject: departmentProject || '',
-          employmentCategory: employmentCategory || '',
-          certifications: Array.isArray(certifications)
-            ? certifications
-            : String(certifications || '').split(',').map((s) => s.trim()).filter(Boolean),
-          pdsAvailable: pdsFile ? true : !!pdsAvailable,
-          idViewAvailable: idFile ? true : !!idViewAvailable,
-          pdsFilePath: pdsFile ? `/uploads/${pdsFile.filename}` : null,
-          idFilePath: idFile ? `/uploads/${idFile.filename}` : null,
-          avatarUrl,
-        };
-        const idx = list.findIndex((r) => r.uid === uid);
-        if (idx === -1) list.push(emp); else list[idx] = emp;
-        fs.writeFileSync(fallbackFile, JSON.stringify(list, null, 2));
-        res.status(201).json(emp);
-      } catch (_ee) {
-        res.status(500).json({ error: 'db_error', detail: e && e.message ? String(e.message) : 'unknown' });
-      }
+      res.status(500).json({ error: 'db_error', detail: e && e.message ? String(e.message) : 'unknown' });
     }
   });
 
   router.put('/:uid', upload.fields([{ name: 'pdsFile', maxCount: 1 }, { name: 'idFile', maxCount: 1 }]), async (req, res) => {
     const { uid } = req.params;
-    if (!USE_DB) {
-      const list = readFallback();
-      const idx = list.findIndex((e) => e.uid === uid);
-      if (idx === -1) return res.status(404).json({ error: 'Not found' });
-      const cur = list[idx];
-      const {
-        name = cur.name,
-        departmentProject = cur.departmentProject,
-        employmentCategory = cur.employmentCategory,
-        certifications = cur.certifications,
-        pdsAvailable = cur.pdsAvailable,
-        idViewAvailable = cur.idViewAvailable,
-        avatarUrl = cur.avatarUrl,
-      } = req.body || {};
-      const pdsFile = req.files?.pdsFile?.[0];
-      const idFile = req.files?.idFile?.[0];
-      list[idx] = {
-        uid,
-        name,
-        departmentProject,
-        employmentCategory,
-        certifications: Array.isArray(certifications)
-          ? certifications
-          : String(certifications || '').split(',').map((s) => s.trim()).filter(Boolean),
-        pdsAvailable: pdsFile ? true : !!pdsAvailable,
-        idViewAvailable: idFile ? true : !!idViewAvailable,
-        pdsFilePath: pdsFile ? `/uploads/${pdsFile.filename}` : cur.pdsFilePath || null,
-        idFilePath: idFile ? `/uploads/${idFile.filename}` : cur.idFilePath || null,
-        avatarUrl,
-      };
-      writeFallback(list);
-      return res.json(list[idx]);
-    }
     try {
       await ensureEmployeesTable();
       const [curRows] = await db.query('SELECT * FROM employees WHERE uid=?', [uid]);

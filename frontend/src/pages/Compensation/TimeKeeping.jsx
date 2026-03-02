@@ -129,8 +129,8 @@ export default function TimeKeeping() {
           </div>
         )}
         
-        <div className="table">
-          <div className="thead" style={{ gridTemplateColumns: '140px 200px 120px 120px 120px 120px 120px 120px 100px' }}>
+        <div className="table timekeeping-table">
+          <div className="thead">
             <div>UID</div>
             <div>Name</div>
             <div>Clock In</div>
@@ -144,7 +144,7 @@ export default function TimeKeeping() {
           {(records.length ? records : Array.from({ length: 4 }, (_, i) => ({ key: i }))).map((row) => {
             if (!records.length) {
               return (
-                <div className="trow" key={row.key} style={{ gridTemplateColumns: '140px 200px 120px 120px 120px 120px 120px 120px 100px' }}>
+                <div className="trow" key={row.key}>
                   <div>-</div>
                   <div className="namecell"><span>-</span></div>
                   <div>-</div>
@@ -158,7 +158,7 @@ export default function TimeKeeping() {
               );
             }
             return (
-              <div className="trow" key={row.uid} style={{ gridTemplateColumns: '140px 200px 120px 120px 120px 120px 120px 120px 100px' }}>
+              <div className="trow" key={row.uid}>
                 <div>{row.uid}</div>
                 <div className="namecell"><span>{row.name}</span></div>
                 <div>{row.clockIn}</div>
