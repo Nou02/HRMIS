@@ -122,11 +122,11 @@ export default function EmployeesList() {
       </div>
 
       <div className="metrics">
+        <Metric label="Total Employees" value={stats?.totalEmployees ?? '-'} />
         <Metric label="No. of Job Order" value={stats?.jobOrderCount ?? '-'} />
         <Metric label="No. of Regular Employees" value={stats?.regularEmployeeCount ?? '-'} />
         <Metric label="No. of Technical Operations Divisions" value={stats?.technicalOpsDivisions ?? '-'} />
         <Metric label="No. of Admin" value={stats?.adminCount ?? '-'} />
-        <Metric label="Total Employees" value={stats?.totalEmployees ?? '-'} />
       </div>
 
       <div className="card">
