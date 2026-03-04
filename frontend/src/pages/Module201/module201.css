@@ -67,6 +67,11 @@
   border: 1px solid var(--border);
   border-radius: 12px;
   padding: 16px;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.metric:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
 }
 .metric-label {
   color: var(--muted);
@@ -83,6 +88,11 @@
   border-radius: 12px;
   overflow: hidden;
   width: 100%;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
 }
 .card-header {
   display: flex;
@@ -207,10 +217,30 @@
   align-items: center;
   gap: 10px;
 }
-.namecell img {
-  width: 28px;
-  height: 28px;
-  border-radius: 999px;
+.employee-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  overflow: hidden;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #e2e8f0;
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 600;
+}
+.employee-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.employee-avatar-initials {
+  line-height: 1;
+}
+.employee-avatar-empty {
+  background: #f1f5f9;
 }
 .iconbtn {
   background: var(--card-bg);

@@ -114,7 +114,7 @@ export default function EmployeesList() {
   return (
     <div className="screen">
       <div className="screen-header">
-        <div className="title">201 · Employee's List</div>
+        <div className="title">Employee's List</div>
         <div className="actions">
           <button className="btn primary" onClick={openAdd}>+ Add Employee</button>
           <div className="avatar" />
@@ -159,7 +159,10 @@ export default function EmployeesList() {
               return (
                 <div className="trow" key={item.key}>
                   <div>-</div>
-                  <div className="namecell"><span>-</span></div>
+                  <div className="namecell">
+                    <div className="employee-avatar employee-avatar-empty" />
+                    <span>-</span>
+                  </div>
                   <div>-</div>
                   <div>-</div>
                   <div>-</div>
@@ -173,7 +176,13 @@ export default function EmployeesList() {
               <div className="trow" key={e.uid}>
                 <div>{e.uid}</div>
                 <div className="namecell">
-                  {e.avatarUrl ? <img src={e.avatarUrl} alt="" /> : null}
+                  <div className="employee-avatar">
+                    {e.avatarUrl ? (
+                      <img src={e.avatarUrl} alt="" />
+                    ) : (
+                      <span className="employee-avatar-initials">{(e.name || '?').trim().charAt(0).toUpperCase()}</span>
+                    )}
+                  </div>
                   <span>{e.name}</span>
                 </div>
                 <div>{e.departmentProject}</div>

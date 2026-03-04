@@ -96,7 +96,7 @@ export default function Application() {
   return (
     <div className="screen">
       <div className="screen-header">
-        <div className="title">201 • Application</div>
+        <div className="title">Application</div>
         <div className="actions">
           <button className="btn primary" onClick={openAdd}>+ New Application</button>
           <div className="avatar" />

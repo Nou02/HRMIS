@@ -25,7 +25,7 @@ export default function ReportsCompensation() {
   return (
     <div className="screen">
       <div className="screen-header">
-        <div className="title">Reports · Compensation</div>
+        <div className="title">Compensation</div>
         <div className="actions">
           <div className="avatar" />
         </div>

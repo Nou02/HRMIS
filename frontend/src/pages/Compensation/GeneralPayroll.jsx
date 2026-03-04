@@ -64,7 +64,7 @@ export default function GeneralPayroll() {
   return (
     <div className="screen">
       <div className="screen-header">
-        <div className="title">Compensation · General Payroll</div>
+        <div className="title">General Payroll</div>
         <div className="actions">
           <div className="avatar" />
         </div>

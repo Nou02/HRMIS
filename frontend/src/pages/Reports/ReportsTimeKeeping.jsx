@@ -79,7 +79,7 @@ export default function ReportsTimeKeeping() {
   return (
     <div className="screen">
       <div className="screen-header">
-        <div className="title">Reports · Time Keeping</div>
+        <div className="title">Time Keeping</div>
         <div className="actions">
           <input className="input" type="date" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} />
           <div className="avatar" />
