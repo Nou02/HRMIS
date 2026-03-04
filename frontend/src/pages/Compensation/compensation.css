@@ -115,10 +115,29 @@
 }
 .thead, .trow {
   display: grid;
-  grid-template-columns: 160px 220px 140px 140px 140px 160px 120px;
   gap: 8px;
   padding: 12px 16px;
   align-items: center;
+}
+.payroll-table .thead,
+.payroll-table .trow {
+  grid-template-columns: 0.9fr 1.4fr 1.1fr 1.1fr 1.1fr 1.1fr 0.9fr 0.8fr;
+}
+.timekeeping-table .thead,
+.timekeeping-table .trow {
+  grid-template-columns: 0.7fr 1.3fr 1fr 1fr 1.1fr 1.1fr 1.1fr 0.9fr 0.8fr;
+}
+.reports-timekeeping-table .thead,
+.reports-timekeeping-table .trow {
+  grid-template-columns: 0.7fr 1.3fr 1fr 1fr 1.1fr 1.1fr 1.1fr 0.9fr;
+}
+.reports-payroll-table .thead,
+.reports-payroll-table .trow {
+  grid-template-columns: 0.9fr 1.4fr 1.1fr 1.1fr 1.1fr 1.1fr 0.9fr;
+}
+.reports-payslip-table .thead,
+.reports-payslip-table .trow {
+  grid-template-columns: 0.9fr 1.4fr 1.1fr 1.1fr 1.1fr 1.1fr 1.2fr 0.9fr;
 }
 .thead {
   background: #f1f5f9;
