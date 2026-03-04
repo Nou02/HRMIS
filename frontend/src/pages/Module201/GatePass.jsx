@@ -118,7 +118,7 @@ export default function GatePass() {
   return (
     <div className="screen">
       <div className="screen-header">
-        <div className="title">201 • Gate Pass</div>
+        <div className="title">Gate Pass</div>
         <div className="actions">
           <button className="btn primary" onClick={openAdd}>+ New Gate Pass</button>
           <div className="avatar" />

@@ -96,7 +96,7 @@ export default function Application() {
   return (
     <div className="screen">
       <div className="screen-header">
-        <div className="title">201 • Application</div>
+        <div className="title">Application</div>
         <div className="actions">
           <button className="btn primary" onClick={openAdd}>+ New Application</button>
           <div className="avatar" />
@@ -136,7 +136,7 @@ export default function Application() {
             </div>
           </div>
         )}
-        <div className="table">
+        <div className="table applications-table">
           <div className="thead">
             <div>UID</div>
             <div>Name</div>

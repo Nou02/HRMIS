@@ -19,7 +19,15 @@ export default function Sidebar({ active, onNavigate, onLogout }) {
 
   return (
     <aside className="sidebar">
-      <div className="brand">HRMIS</div>
+      <div className="brand">
+        <img
+          className="brand-logo"
+          src="https://commons.wikimedia.org/wiki/Special:FilePath/Department_of_Information_and_Communications_Technology_(DICT)_-_Seal_only.svg"
+          alt="DICT Seal"
+          draggable="false"
+        />
+        <span className="brand-text">HRMIS</span>
+      </div>
       <div className="nav-group">
         <Item label="Dashboard" id="dashboard" active={active} onNavigate={onNavigate} />
       </div>

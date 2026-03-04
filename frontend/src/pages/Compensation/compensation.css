@@ -48,6 +48,11 @@
   border: 1px solid var(--border);
   border-radius: 12px;
   overflow: hidden;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
 }
 .card-header {
   display: flex;
@@ -75,6 +80,11 @@
   border: 1px solid var(--border);
   border-radius: 12px;
   padding: 16px;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.metric:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
 }
 .metric-label {
   color: var(--muted);

@@ -64,7 +64,7 @@ export default function GeneralPayroll() {
   return (
     <div className="screen">
       <div className="screen-header">
-        <div className="title">Compensation · General Payroll</div>
+        <div className="title">General Payroll</div>
         <div className="actions">
           <div className="avatar" />
         </div>
@@ -144,8 +144,8 @@ export default function GeneralPayroll() {
           </div>
         )}
         
-        <div className="table">
-          <div className="thead" style={{ gridTemplateColumns: '160px 220px 140px 140px 140px 160px 120px 120px' }}>
+        <div className="table payroll-table">
+          <div className="thead">
             <div>Employee ID</div>
             <div>Employee Name</div>
             <div>Base Salary</div>
@@ -158,7 +158,7 @@ export default function GeneralPayroll() {
           {(records.length ? records : Array.from({ length: 4 }, (_, i) => ({ key: i }))).map((row) => {
             if (!records.length) {
               return (
-                <div className="trow" key={row.key} style={{ gridTemplateColumns: '160px 220px 140px 140px 140px 160px 120px 120px' }}>
+                <div className="trow" key={row.key}>
                   <div>-</div>
                   <div>-</div>
                   <div>-</div>
@@ -182,7 +182,7 @@ export default function GeneralPayroll() {
               );
             }
             return (
-              <div className="trow" key={row.employeeId} style={{ gridTemplateColumns: '160px 220px 140px 140px 140px 160px 120px 120px' }}>
+              <div className="trow" key={row.employeeId}>
                 <div>{row.employeeId}</div>
                 <div>{row.employeeName}</div>
                 <div>{row.baseSalary}</div>
