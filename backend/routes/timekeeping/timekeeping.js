@@ -33,22 +33,36 @@ module.exports = (state, db) => {
     }
   }
 
+  function formatHM(minutes) {
+    const total = Number(minutes) || 0;
+    if (!total) return '-';
+    const hours = Math.floor(total / 60);
+    const mins = total % 60;
+    return `${hours}h ${String(mins).padStart(2, '0')}m`;
+  }
+
   router.get('/summary', async (_req, res) => {
     try {
       await ensureTimekeepingTable();
       const [empRows] = await db.query('SELECT COUNT(*) AS totalEmployees FROM employees');
-      const [tkRows] = await db.query('SELECT status FROM timekeeping_records');
+      const [tkRows] = await db.query('SELECT status, total_overtime_minutes, total_late_minutes FROM timekeeping_records');
       const totalEmployees = empRows[0]?.totalEmployees || 0;
       const totalAttendance = timekeepingRecords.length || totalEmployees;
-      const totalLate = tkRows.filter((r) => r.status === 'Late').length;
+      const totalLateMinutes = tkRows.reduce(
+        (sum, r) => sum + (Number(r.total_late_minutes) || 0),
+        0
+      );
       const totalAbsent = tkRows.filter((r) => r.status === 'Absent').length;
-      const totalOvertimeMinutes = 0;
-      const hours = Math.floor(totalOvertimeMinutes / 60);
+      const totalOvertimeMinutes = tkRows.reduce(
+        (sum, r) => sum + (Number(r.total_overtime_minutes) || 0),
+        0
+      );
+      const overtimeHours = Math.floor(totalOvertimeMinutes / 60);
       res.json({
         totalAttendance,
-        totalLate,
+        totalLate: formatHM(totalLateMinutes),
         totalAbsent,
-        totalOvertime: hours ? `${hours}h` : '—',
+        totalOvertime: overtimeHours ? `${overtimeHours}h` : '—',
         calendar: '',
       });
     } catch (_e) {
@@ -88,16 +102,15 @@ module.exports = (state, db) => {
             ? 'review'
             : 'draft';
         const totalMinutes = tk ? (tk.total_time_minutes || 0) : 0;
-        const hours = Math.floor(totalMinutes / 60);
-        const minutes = totalMinutes % 60;
+        const overtimeMinutes = tk ? (tk.total_overtime_minutes || 0) : 0;
         rows.push({
           uid: e.uid,
           name: e.name,
           clockIn: tk && tk.clock_in ? tk.clock_in.toString().slice(0, 5) : '-',
           clockOut: tk && tk.clock_out ? tk.clock_out.toString().slice(0, 5) : '-',
-          totalTime: totalMinutes ? `${hours}h ${String(minutes).padStart(2, '0')}m` : '-',
+          totalTime: formatHM(totalMinutes),
           totalLate: tk && tk.total_late_minutes ? `${tk.total_late_minutes}m` : '-',
-          totalOvertime: tk && tk.total_overtime_minutes ? `${tk.total_overtime_minutes}m` : '-',
+          totalOvertime: formatHM(overtimeMinutes),
           status,
           statusClass,
         });
@@ -140,15 +153,18 @@ module.exports = (state, db) => {
   router.post('/', async (req, res) => {
     const { uid, name, clockIn = '', clockOut = '', status = 'Present', date = null } = req.body || {};
     if (!uid || !name) return res.status(400).json({ error: 'uid and name are required' });
-    const totalTime = (clockIn && clockOut) ? '8h 00m' : '-';
+    const totalMinutes = diffMinutes(clockIn, clockOut);
+    const overtimeMinutes = totalMinutes ? Math.max(0, totalMinutes - 540) : 0;
+    const lateMinutes = clockIn ? diffMinutes('08:00', clockIn) : 0;
+    const totalTime = formatHM(totalMinutes);
     const rec = {
       uid,
       name,
       clockIn,
       clockOut,
       totalTime,
-      totalLate: status === 'Late' ? '15m' : '0m',
-      totalOvertime: '0m',
+      totalLate: lateMinutes ? `${lateMinutes}m` : '-',
+      totalOvertime: formatHM(overtimeMinutes),
       status,
       statusClass:
         status === 'Present'
@@ -167,9 +183,7 @@ module.exports = (state, db) => {
       const [ers] = await db.query('SELECT id FROM employees WHERE uid = ?', [uid]);
       if (ers.length) {
         const employeeId = ers[0].id;
-        const totalMinutes = diffMinutes(clockIn, clockOut);
-        const lateMinutes = status === 'Late' ? 15 : 0;
-        const overtimeMinutes = 0;
+        const lateMinutes = clockIn ? diffMinutes('08:00', clockIn) : 0;
         await db.query(
           `INSERT INTO timekeeping_records (employee_id,date,clock_in,clock_out,total_time_minutes,total_late_minutes,total_overtime_minutes,status)
            VALUES (?,?,?,?,?,?,?,?)`,
@@ -214,14 +228,12 @@ module.exports = (state, db) => {
       clockOut = cur.clockOut,
       status = cur.status || 'Present',
     } = req.body || {};
-    const totalTime = (clockIn && clockOut) ? '8h 00m' : cur.totalTime || '-';
-    const totalLate =
-      status === 'Late'
-        ? '15m'
-        : status === 'Present'
-        ? '0m'
-        : cur.totalLate || '0m';
-    const totalOvertime = cur.totalOvertime || '0m';
+    const totalMinutes = diffMinutes(clockIn, clockOut);
+    const overtimeMinutes = totalMinutes ? Math.max(0, totalMinutes - 540) : 0;
+    const totalTime = totalMinutes ? formatHM(totalMinutes) : cur.totalTime || '-';
+    const lateMinutes = clockIn ? diffMinutes('08:00', clockIn) : 0;
+    const totalLate = lateMinutes ? `${lateMinutes}m` : cur.totalLate || '0m';
+    const totalOvertime = formatHM(overtimeMinutes) || cur.totalOvertime || '0m';
     const statusClass =
       status === 'Present'
         ? 'approved'
@@ -254,9 +266,7 @@ module.exports = (state, db) => {
         const [ers] = await db.query('SELECT id FROM employees WHERE uid = ?', [uid]);
         if (ers.length) {
           const employeeId = ers[0].id;
-          const totalMinutes = diffMinutes(clockIn, clockOut);
-          const lateMinutes = status === 'Late' ? 15 : 0;
-          const overtimeMinutes = 0;
+          const lateMinutes = clockIn ? diffMinutes('08:00', clockIn) : 0;
           const [rows] = await db.query(
             `SELECT id FROM timekeeping_records WHERE employee_id = ? ORDER BY date DESC, id DESC LIMIT 1`,
             [employeeId]
