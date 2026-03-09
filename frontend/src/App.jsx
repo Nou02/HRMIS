@@ -11,12 +11,14 @@ import ReportsTimeKeeping from './pages/Reports/ReportsTimeKeeping';
 import ReportsCompensation from './pages/Reports/ReportsCompensation';
 import Landing from './pages/Landing';
 import Login from './pages/Login';
+import PasswordRecovery from './pages/PasswordRecovery';
 import './index.css';
 
 function App() {
   const [active, setActive] = useState('employees');
   const [showLanding, setShowLanding] = useState(true);
   const [showLogin, setShowLogin] = useState(false);
+  const [showRecovery, setShowRecovery] = useState(false);
 
   if (showLanding) {
     return (
@@ -30,7 +32,26 @@ function App() {
   }
 
   if (showLogin) {
-    return <Login onLogin={() => setShowLogin(false)} />;
+    return (
+      <Login
+        onLogin={() => setShowLogin(false)}
+        onForgot={() => {
+          setShowLogin(false);
+          setShowRecovery(true);
+        }}
+      />
+    );
+  }
+
+  if (showRecovery) {
+    return (
+      <PasswordRecovery
+        onBack={() => {
+          setShowRecovery(false);
+          setShowLogin(true);
+        }}
+      />
+    );
   }
 
   return (

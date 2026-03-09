@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import './login.css';
 
-export default function Login({ onLogin }) {
+export default function Login({ onLogin, onForgot }) {
   const [enter, setEnter] = useState(false);
   useEffect(() => {
     const t = setTimeout(() => setEnter(true), 50);
@@ -41,7 +41,16 @@ export default function Login({ onLogin }) {
               <span>Password</span>
               <input type="password" placeholder="Enter password" />
             </label>
-            <button type="submit">Login</button>
+            <button type="submit" className="submit" aria-label="Login">→</button>
+            <div className="forgot">
+              <button
+                type="button"
+                className="link"
+                onClick={() => onForgot?.()}
+              >
+                Forgot Password?
+              </button>
+            </div>
           </form>
         </div>
       </div>
