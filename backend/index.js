@@ -35,6 +35,7 @@ const payrollRouter = require('./routes/payroll/payroll')(state, db);
 const payslipsRouter = require('./routes/payslips/payslips')(state, db);
 const timekeepingRouter = require('./routes/timekeeping/timekeeping')(state, db);
 const landingRouter = require('./routes/landing/landing')();
+const authRouter = require('./routes/auth/auth')(db);
 
 app.use('/api/stats', dashboardRouter);
 app.use('/api/health', healthRouter);
@@ -45,6 +46,7 @@ app.use('/api/gatepasses', gatepassesRouter);
 app.use('/api/payroll', payrollRouter);
 app.use('/api/payslips', payslipsRouter);
 app.use('/api/timekeeping', timekeepingRouter);
+app.use('/api/auth', authRouter);
 
 const PORT = process.env.PORT || 5174;
 app.listen(PORT, () => {

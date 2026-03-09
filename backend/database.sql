@@ -102,3 +102,14 @@ CREATE INDEX idx_time_employee ON timekeeping_records(employee_id);
 CREATE INDEX idx_time_status ON timekeeping_records(status);
 CREATE INDEX idx_time_date ON timekeeping_records(date);
 
+CREATE TABLE IF NOT EXISTS accounts (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  username VARCHAR(80) NOT NULL UNIQUE,
+  password_hash VARCHAR(255) NOT NULL,
+  role VARCHAR(40),
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+CREATE INDEX idx_accounts_username ON accounts(username);
+CREATE INDEX idx_accounts_role ON accounts(role);
+
