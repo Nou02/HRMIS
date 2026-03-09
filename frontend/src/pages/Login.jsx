@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import './login.css';
 import { API_BASE } from '../lib/api';
 
-export default function Login({ onLogin }) {
+export default function Login({ onLogin, onForgot }) {
   const [enter, setEnter] = useState(false);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -71,8 +71,16 @@ export default function Login({ onLogin }) {
                 onChange={(e) => setPassword(e.target.value)}
               />
             </label>
-            {error && <div style={{ color: '#dc2626', fontSize: 12 }}>{error}</div>}
-            <button type="submit">Login</button>
+            <button type="submit" className="submit" aria-label="Login">→</button>
+            <div className="forgot">
+              <button
+                type="button"
+                className="link"
+                onClick={() => onForgot?.()}
+              >
+                Forgot Password?
+              </button>
+            </div>
           </form>
         </div>
       </div>
