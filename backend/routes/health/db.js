@@ -18,9 +18,11 @@ module.exports = (db) => {
         database: process.env.DB_NAME,
       });
     } catch (e) {
+      console.error('Health DB error:', e);
       res.status(200).json({
         ok: false,
         error: e && e.message ? String(e.message) : 'unknown',
+        code: e && e.code ? String(e.code) : 'no_code',
         host: process.env.DB_HOST,
         port: Number(process.env.DB_PORT || 3306),
         user: process.env.DB_USER,

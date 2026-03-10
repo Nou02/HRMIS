@@ -114,3 +114,6 @@ CREATE TABLE IF NOT EXISTS accounts (
 CREATE INDEX idx_accounts_username ON accounts(username);
 CREATE INDEX idx_accounts_role ON accounts(role);
 
+-- INSERT INITIAL ADMIN ACCOUNT (Optional, use your preferred username/password)
+-- INSERT INTO accounts (username, password_hash, role, email) VALUES ('admin', 'admin123', 'admin', 'admin@example.com');
+

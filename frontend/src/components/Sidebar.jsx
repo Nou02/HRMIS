@@ -12,14 +12,22 @@ function Item({ label, id, level = 0, active, onNavigate }) {
   );
 }
 
-export default function Sidebar({ active, onNavigate }) {
+export default function Sidebar({ active, onNavigate, onLogout }) {
   const [open201, setOpen201] = useState(true);
   const [openComp, setOpenComp] = useState(false);
   const [openReports, setOpenReports] = useState(false);
 
   return (
     <aside className="sidebar">
-      <div className="brand">HRMIS</div>
+      <div className="brand">
+        <img
+          className="brand-logo"
+          src="https://commons.wikimedia.org/wiki/Special:FilePath/Department_of_Information_and_Communications_Technology_(DICT)_-_Seal_only.svg"
+          alt="DICT Seal"
+          draggable="false"
+        />
+        <span className="brand-text">HRMIS</span>
+      </div>
       <div className="nav-group">
         <Item label="Dashboard" id="dashboard" active={active} onNavigate={onNavigate} />
       </div>
@@ -55,6 +63,9 @@ export default function Sidebar({ active, onNavigate }) {
           <Item label="Compensation" id="reports-comp" level={1} active={active} onNavigate={onNavigate} />
         </div>
       )}
+      <div className="sidebar-footer">
+        <button className="logout-button" onClick={onLogout}>Log out</button>
+      </div>
     </aside>
   );
 }
