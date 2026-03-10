@@ -9,10 +9,18 @@ module.exports = (db) => {
       return res.status(400).json({ error: 'username and password are required' });
     }
     try {
+      // Be defensive: user might not have added the email column yet
       const [rows] = await db.query(
-        'SELECT id, username, password_hash, role FROM accounts WHERE username = ? LIMIT 1',
-        [username]
-      );
+        'SELECT * FROM accounts WHERE username = ? OR email = ? LIMIT 1',
+        [username, username]
+      ).catch(async () => {
+        // Fallback if email column is missing
+        return db.query(
+          'SELECT * FROM accounts WHERE username = ? LIMIT 1',
+          [username]
+        );
+      });
+
       if (!rows.length) {
         return res.status(401).json({ error: 'invalid_credentials' });
       }
@@ -23,10 +31,12 @@ module.exports = (db) => {
       res.json({
         id: acc.id,
         username: acc.username,
+        email: acc.email || null,
         role: acc.role || 'user',
       });
-    } catch (_e) {
-      res.status(500).json({ error: 'auth_db_error' });
+    } catch (e) {
+      console.error('Auth error:', e);
+      res.status(500).json({ error: 'auth_db_error', details: e.message });
     }
   });
 

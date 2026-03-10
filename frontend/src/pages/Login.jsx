@@ -41,23 +41,23 @@ export default function Login({ onLogin, onForgot }) {
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({ username, password }),
                 });
+                const acc = await res.json();
                 if (!res.ok) {
-                  setError('Invalid username or password');
+                  setError(acc.error === 'auth_db_error' ? 'Database connection error' : 'Invalid username or password');
                   return;
                 }
-                const acc = await res.json();
                 localStorage.setItem('hrmisUser', JSON.stringify(acc));
                 onLogin?.();
-              } catch {
+              } catch (e) {
                 setError('Unable to contact server');
               }
             }}
           >
             <label>
-              <span>Username</span>
+              <span>Username or Email</span>
               <input
                 type="text"
-                placeholder="Enter username"
+                placeholder="Enter username or email"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
               />
