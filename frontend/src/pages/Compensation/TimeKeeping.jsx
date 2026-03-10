@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import './compensation.css';
+import { API_BASE } from '../../lib/api';
 
 export default function TimeKeeping() {
   const [query, setQuery] = useState('');
@@ -16,6 +17,7 @@ export default function TimeKeeping() {
   const [records, setRecords] = useState([]);
   const [summary, setSummary] = useState(null);
   const [modalOpen, setModalOpen] = useState(false);
+  const [editingUid, setEditingUid] = useState(null);
   const [form, setForm] = useState({
     uid: '',
     name: '',
@@ -25,7 +27,7 @@ export default function TimeKeeping() {
   });
 
   React.useEffect(() => {
-    fetch('http://localhost:5174/api/timekeeping/summary')
+    fetch(`${API_BASE}/api/timekeeping/summary`)
       .then((r) => r.json())
       .then(setSummary)
       .catch(() => {});
@@ -36,7 +38,7 @@ export default function TimeKeeping() {
     if (query) params.set('q', query);
     if (sortNameAZ) params.set('sort', 'name_asc');
     if (statusFilter) params.set('status', statusFilter);
-    fetch(`http://localhost:5174/api/timekeeping${params.toString() ? `?${params.toString()}` : ''}`)
+    fetch(`${API_BASE}/api/timekeeping${params.toString() ? `?${params.toString()}` : ''}`)
       .then((r) => r.json())
       .then(setRecords)
       .catch(() => setRecords([]));
@@ -50,17 +52,23 @@ export default function TimeKeeping() {
 
   function submitForm(e) {
     e.preventDefault();
-    fetch('http://localhost:5174/api/timekeeping', {
-      method: 'POST',
+    const payload = { ...form, date: selectedDate };
+    const url = editingUid
+      ? `${API_BASE}/api/timekeeping/${encodeURIComponent(editingUid)}`
+      : `${API_BASE}/api/timekeeping`;
+    const method = editingUid ? 'PUT' : 'POST';
+    fetch(url, {
+      method,
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(form),
+      body: JSON.stringify(payload),
     })
       .then((r) => r.json())
       .then(() => {
         setModalOpen(false);
+        setEditingUid(null);
         setForm({ uid: '', name: '', clockIn: '', clockOut: '', status: 'Present' });
         loadRecords();
-        fetch('http://localhost:5174/api/timekeeping/summary')
+        fetch(`${API_BASE}/api/timekeeping/summary`)
           .then((r) => r.json())
           .then(setSummary)
           .catch(() => {});
@@ -71,7 +79,7 @@ export default function TimeKeeping() {
   return (
     <div className="screen">
       <div className="screen-header">
-        <div className="title">Compensation · Time Keeping</div>
+        <div className="title">Time Keeping</div>
         <div className="actions">
           <input className="input" type="date" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} />
           <div className="avatar" />
@@ -103,7 +111,16 @@ export default function TimeKeeping() {
               />
             </div>
             <button className="btn light" onClick={() => setFiltersOpen((v) => !v)}>Filters</button>
-            <button className="btn primary" onClick={() => setModalOpen(true)}>Add Record</button>
+            <button
+              className="btn primary"
+              onClick={() => {
+                setEditingUid(null);
+                setForm({ uid: '', name: '', clockIn: '', clockOut: '', status: 'Present' });
+                setModalOpen(true);
+              }}
+            >
+              Add Record
+            </button>
           </div>
         </div>
         {filtersOpen && (
@@ -128,8 +145,8 @@ export default function TimeKeeping() {
           </div>
         )}
         
-        <div className="table">
-          <div className="thead" style={{ gridTemplateColumns: '140px 200px 120px 120px 120px 120px 120px 120px 100px' }}>
+        <div className="table timekeeping-table">
+          <div className="thead">
             <div>UID</div>
             <div>Name</div>
             <div>Clock In</div>
@@ -143,7 +160,7 @@ export default function TimeKeeping() {
           {(records.length ? records : Array.from({ length: 4 }, (_, i) => ({ key: i }))).map((row) => {
             if (!records.length) {
               return (
-                <div className="trow" key={row.key} style={{ gridTemplateColumns: '140px 200px 120px 120px 120px 120px 120px 120px 100px' }}>
+                <div className="trow" key={row.key}>
                   <div>-</div>
                   <div className="namecell"><span>-</span></div>
                   <div>-</div>
@@ -157,7 +174,7 @@ export default function TimeKeeping() {
               );
             }
             return (
-              <div className="trow" key={row.uid} style={{ gridTemplateColumns: '140px 200px 120px 120px 120px 120px 120px 120px 100px' }}>
+              <div className="trow" key={row.uid}>
                 <div>{row.uid}</div>
                 <div className="namecell"><span>{row.name}</span></div>
                 <div>{row.clockIn}</div>
@@ -166,7 +183,24 @@ export default function TimeKeeping() {
                 <div>{row.totalLate}</div>
                 <div>{row.totalOvertime}</div>
                 <div><span className={`status ${row.statusClass}`}>{row.status}</span></div>
-                <div><button className="btn small">Edit</button></div>
+                <div>
+                  <button
+                    className="btn small"
+                    onClick={() => {
+                      setEditingUid(row.uid);
+                      setForm({
+                        uid: row.uid,
+                        name: row.name,
+                        clockIn: row.clockIn && row.clockIn !== '-' ? row.clockIn : '',
+                        clockOut: row.clockOut && row.clockOut !== '-' ? row.clockOut : '',
+                        status: row.status || 'Present',
+                      });
+                      setModalOpen(true);
+                    }}
+                  >
+                    Edit
+                  </button>
+                </div>
               </div>
             );
           })}

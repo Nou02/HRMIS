@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import './compensation.css';
+import { API_BASE } from '../../lib/api';
 
 export default function GeneralPayroll() {
   const [period, setPeriod] = useState('');
@@ -22,7 +23,7 @@ export default function GeneralPayroll() {
   });
 
   React.useEffect(() => {
-    fetch('http://localhost:5174/api/payroll/summary')
+    fetch(`${API_BASE}/api/payroll/summary`)
       .then((r) => r.json())
       .then(setSummary)
       .catch(() => {});
@@ -31,13 +32,13 @@ export default function GeneralPayroll() {
     const params = new URLSearchParams();
     if (query) params.set('q', query);
     if (nameSortAZ) params.set('sort', 'name_asc');
-    fetch(`http://localhost:5174/api/payroll/records${params.toString() ? `?${params.toString()}` : ''}`)
+    fetch(`${API_BASE}/api/payroll/records${params.toString() ? `?${params.toString()}` : ''}`)
       .then((r) => r.json())
       .then((list) => {
         if (Array.isArray(list) && list.length > 0) {
           setRecords(list);
         } else {
-          fetch('http://localhost:5174/api/employees')
+          fetch(`${API_BASE}/api/employees`)
             .then((r) => r.json())
             .then((emps) => {
               const rows = (emps || []).map((e) => ({
@@ -63,7 +64,7 @@ export default function GeneralPayroll() {
   return (
     <div className="screen">
       <div className="screen-header">
-        <div className="title">Compensation · General Payroll</div>
+        <div className="title">General Payroll</div>
         <div className="actions">
           <div className="avatar" />
         </div>
@@ -74,17 +75,17 @@ export default function GeneralPayroll() {
           <div className="card-title">Payroll Processing Setup</div>
           <div className="card-actions">
             <button className="btn primary" onClick={() => {
-              fetch('http://localhost:5174/api/payroll/generate', { method: 'POST' })
+              fetch(`${API_BASE}/api/payroll/generate`, { method: 'POST' })
                 .then((r) => r.json())
                 .then(() => {
-                  fetch('http://localhost:5174/api/payroll/summary')
+                  fetch(`${API_BASE}/api/payroll/summary`)
                     .then((r) => r.json())
                     .then(setSummary)
                     .catch(() => {});
                   const params = new URLSearchParams();
                   if (query) params.set('q', query);
                   if (nameSortAZ) params.set('sort', 'name_asc');
-                  fetch(`http://localhost:5174/api/payroll/records${params.toString() ? `?${params.toString()}` : ''}`)
+                  fetch(`${API_BASE}/api/payroll/records${params.toString() ? `?${params.toString()}` : ''}`)
                     .then((r) => r.json())
                     .then(setRecords)
                     .catch(() => {});
@@ -143,8 +144,8 @@ export default function GeneralPayroll() {
           </div>
         )}
         
-        <div className="table">
-          <div className="thead" style={{ gridTemplateColumns: '160px 220px 140px 140px 140px 160px 120px 120px' }}>
+        <div className="table payroll-table">
+          <div className="thead">
             <div>Employee ID</div>
             <div>Employee Name</div>
             <div>Base Salary</div>
@@ -157,7 +158,7 @@ export default function GeneralPayroll() {
           {(records.length ? records : Array.from({ length: 4 }, (_, i) => ({ key: i }))).map((row) => {
             if (!records.length) {
               return (
-                <div className="trow" key={row.key} style={{ gridTemplateColumns: '160px 220px 140px 140px 140px 160px 120px 120px' }}>
+                <div className="trow" key={row.key}>
                   <div>-</div>
                   <div>-</div>
                   <div>-</div>
@@ -181,7 +182,7 @@ export default function GeneralPayroll() {
               );
             }
             return (
-              <div className="trow" key={row.employeeId} style={{ gridTemplateColumns: '160px 220px 140px 140px 140px 160px 120px 120px' }}>
+              <div className="trow" key={row.employeeId}>
                 <div>{row.employeeId}</div>
                 <div>{row.employeeName}</div>
                 <div>{row.baseSalary}</div>

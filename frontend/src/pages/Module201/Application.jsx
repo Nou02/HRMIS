@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import './module201.css';
+import { API_BASE } from '../../lib/api';
 
 export default function Application() {
   const [query, setQuery] = useState('');
@@ -23,7 +24,7 @@ export default function Application() {
     if (query) params.set('q', query);
     if (nameSortAZ) params.set('sort', 'name_asc');
     if (typeSortAZ) params.set('sort', 'type_asc');
-    const url = `http://localhost:5174/api/applications${params.toString() ? `?${params.toString()}` : ''}`;
+    const url = `${API_BASE}/api/applications${params.toString() ? `?${params.toString()}` : ''}`;
     fetch(url)
       .then((r) => r.json())
       .then(setApplications)
@@ -74,8 +75,8 @@ export default function Application() {
       offsetStatus: form.offsetStatus.trim(),
     };
     const url = editingId
-      ? `http://localhost:5174/api/applications/${encodeURIComponent(editingId)}`
-      : 'http://localhost:5174/api/applications';
+      ? `${API_BASE}/api/applications/${encodeURIComponent(editingId)}`
+      : `${API_BASE}/api/applications`;
     fetch(url, {
       method: editingId ? 'PUT' : 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -95,7 +96,7 @@ export default function Application() {
   return (
     <div className="screen">
       <div className="screen-header">
-        <div className="title">201 • Application</div>
+        <div className="title">Application</div>
         <div className="actions">
           <button className="btn primary" onClick={openAdd}>+ New Application</button>
           <div className="avatar" />
@@ -135,7 +136,7 @@ export default function Application() {
             </div>
           </div>
         )}
-        <div className="table">
+        <div className="table applications-table">
           <div className="thead">
             <div>UID</div>
             <div>Name</div>

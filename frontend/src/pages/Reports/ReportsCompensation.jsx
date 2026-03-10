@@ -1,5 +1,6 @@
 import React from 'react';
 import '../Compensation/compensation.css';
+import { API_BASE } from '../../lib/api';
 
 export default function ReportsCompensation() {
   const [view, setView] = React.useState(null);
@@ -8,13 +9,13 @@ export default function ReportsCompensation() {
 
   React.useEffect(() => {
     if (view === 'payroll') {
-      fetch('http://localhost:5174/api/payroll/records?only_generated=true')
+      fetch(`${API_BASE}/api/payroll/records?only_generated=true`)
         .then((r) => r.json())
         .then(setPayroll)
         .catch(() => setPayroll([]));
     }
     if (view === 'payslips') {
-      fetch('http://localhost:5174/api/payslips?only_confirmed=true')
+      fetch(`${API_BASE}/api/payslips?only_confirmed=true`)
         .then((r) => r.json())
         .then(setPayslips)
         .catch(() => setPayslips([]));
@@ -24,7 +25,7 @@ export default function ReportsCompensation() {
   return (
     <div className="screen">
       <div className="screen-header">
-        <div className="title">Reports · Compensation</div>
+        <div className="title">Compensation</div>
         <div className="actions">
           <div className="avatar" />
         </div>
@@ -51,7 +52,7 @@ export default function ReportsCompensation() {
               <button className="btn light" onClick={() => setView(null)}>Back</button>
             </div>
           </div>
-          <div className="table">
+          <div className="table reports-payroll-table">
             <div className="thead">
               <div>Employee ID</div>
               <div>Employee Name</div>
@@ -87,7 +88,7 @@ export default function ReportsCompensation() {
               <button className="btn light" onClick={() => setView(null)}>Back</button>
             </div>
           </div>
-          <div className="table">
+          <div className="table reports-payslip-table">
             <div className="thead">
               <div>UID</div>
               <div>Name</div>

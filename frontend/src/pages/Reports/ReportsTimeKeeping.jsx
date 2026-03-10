@@ -79,7 +79,7 @@ export default function ReportsTimeKeeping() {
   return (
     <div className="screen">
       <div className="screen-header">
-        <div className="title">Reports · Time Keeping</div>
+        <div className="title">Time Keeping</div>
         <div className="actions">
           <input className="input" type="date" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} />
           <div className="avatar" />
@@ -146,8 +146,8 @@ export default function ReportsTimeKeeping() {
             </div>
           </div>
         )}
-        <div className="table">
-          <div className="thead" style={{ gridTemplateColumns: '140px 200px 120px 120px 120px 120px 120px 120px' }}>
+        <div className="table reports-timekeeping-table">
+          <div className="thead">
             <div>UID</div>
             <div>Name</div>
             <div>Clock In</div>
@@ -160,7 +160,7 @@ export default function ReportsTimeKeeping() {
           {(records.length ? records : Array.from({ length: 4 }, (_, i) => ({ key: i }))).map((row) => {
             if (!records.length) {
               return (
-                <div className="trow" key={row.key} style={{ gridTemplateColumns: '140px 200px 120px 120px 120px 120px 120px 120px' }}>
+                <div className="trow" key={row.key}>
                   <div>-</div>
                   <div className="namecell"><span>-</span></div>
                   <div>-</div>
@@ -173,7 +173,7 @@ export default function ReportsTimeKeeping() {
               );
             }
             return (
-              <div className="trow" key={row.uid} style={{ gridTemplateColumns: '140px 200px 120px 120px 120px 120px 120px 120px' }}>
+              <div className="trow" key={row.uid}>
                 <div>{row.uid}</div>
                 <div className="namecell"><span>{row.name}</span></div>
                 <div>{row.clockIn}</div>

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import './module201.css';
+import { API_BASE } from '../../lib/api';
 
 export default function EmployeesList() {
   const [query, setQuery] = useState('');
@@ -26,7 +27,7 @@ export default function EmployeesList() {
     if (query) params.set('q', query);
     if (nameSortAZ) params.set('sort', 'name_asc');
     if (sortDeptAZ) params.set('sort', 'department_asc');
-    const url = `http://localhost:5174/api/employees${params.toString() ? `?${params.toString()}` : ''}`;
+    const url = `${API_BASE}/api/employees${params.toString() ? `?${params.toString()}` : ''}`;
     fetch(url)
       .then((r) => r.json())
       .then(setEmployees)
@@ -35,7 +36,7 @@ export default function EmployeesList() {
 
   const [stats, setStats] = useState(null);
   const loadStats = () => {
-    fetch('http://localhost:5174/api/stats')
+    fetch(`${API_BASE}/api/stats`)
       .then((r) => r.json())
       .then(setStats)
       .catch(() => {});
@@ -90,8 +91,8 @@ export default function EmployeesList() {
     if (form.pdsFile) fd.append('pdsFile', form.pdsFile);
     if (form.idFile) fd.append('idFile', form.idFile);
     const url = editingUid
-      ? `http://localhost:5174/api/employees/${encodeURIComponent(editingUid)}`
-      : 'http://localhost:5174/api/employees';
+      ? `${API_BASE}/api/employees/${encodeURIComponent(editingUid)}`
+      : `${API_BASE}/api/employees`;
     fetch(url, {
       method: editingUid ? 'PUT' : 'POST',
       body: fd,
@@ -113,7 +114,7 @@ export default function EmployeesList() {
   return (
     <div className="screen">
       <div className="screen-header">
-        <div className="title">201 · Employee's List</div>
+        <div className="title">Employee's List</div>
         <div className="actions">
           <button className="btn primary" onClick={openAdd}>+ Add Employee</button>
           <div className="avatar" />
@@ -121,11 +122,11 @@ export default function EmployeesList() {
       </div>
 
       <div className="metrics">
+        <Metric label="Total Employees" value={stats?.totalEmployees ?? '-'} />
         <Metric label="No. of Job Order" value={stats?.jobOrderCount ?? '-'} />
         <Metric label="No. of Regular Employees" value={stats?.regularEmployeeCount ?? '-'} />
         <Metric label="No. of Technical Operations Divisions" value={stats?.technicalOpsDivisions ?? '-'} />
         <Metric label="No. of Admin" value={stats?.adminCount ?? '-'} />
-        <Metric label="Total Employees" value={stats?.totalEmployees ?? '-'} />
       </div>
 
       <div className="card">
@@ -143,7 +144,7 @@ export default function EmployeesList() {
             <button className="btn light" onClick={() => setFiltersOpen((v) => !v)}>Advanced filters</button>
           </div>
         </div>
-        <div className="table">
+        <div className="table employees-table">
           <div className="thead">
             <div>UID</div>
             <div>Name</div>
@@ -158,7 +159,10 @@ export default function EmployeesList() {
               return (
                 <div className="trow" key={item.key}>
                   <div>-</div>
-                  <div className="namecell"><span>-</span></div>
+                  <div className="namecell">
+                    <div className="employee-avatar employee-avatar-empty" />
+                    <span>-</span>
+                  </div>
                   <div>-</div>
                   <div>-</div>
                   <div>-</div>
@@ -172,13 +176,19 @@ export default function EmployeesList() {
               <div className="trow" key={e.uid}>
                 <div>{e.uid}</div>
                 <div className="namecell">
-                  {e.avatarUrl ? <img src={e.avatarUrl} alt="" /> : null}
+                  <div className="employee-avatar">
+                    {e.avatarUrl ? (
+                      <img src={e.avatarUrl} alt="" />
+                    ) : (
+                      <span className="employee-avatar-initials">{(e.name || '?').trim().charAt(0).toUpperCase()}</span>
+                    )}
+                  </div>
                   <span>{e.name}</span>
                 </div>
                 <div>{e.departmentProject}</div>
                 <div>{Array.isArray(e.certifications) ? e.certifications.join(', ') : e.certifications}</div>
-                <div>{e.pdsFilePath ? <a href={`http://localhost:5174${e.pdsFilePath}`} target="_blank" rel="noreferrer">View</a> : '-'}</div>
-                <div>{e.idFilePath ? <a href={`http://localhost:5174${e.idFilePath}`} target="_blank" rel="noreferrer">View</a> : '-'}</div>
+                <div>{e.pdsFilePath ? <a href={`${API_BASE}${e.pdsFilePath}`} target="_blank" rel="noreferrer">View</a> : '-'}</div>
+                <div>{e.idFilePath ? <a href={`${API_BASE}${e.idFilePath}`} target="_blank" rel="noreferrer">View</a> : '-'}</div>
                 <div><button className="btn small" onClick={() => openEdit(e)}>Edit</button></div>
               </div>
             );
