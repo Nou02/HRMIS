@@ -1,9 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import './login.css';
 import { API_BASE } from '../lib/api';
+import bgPassRecov from '../assets/bgpassrecov.png';
 
 export default function Login({ onLogin, onForgot }) {
   const [enter, setEnter] = useState(false);
+  const [cardHovered, setCardHovered] = useState(false);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   useEffect(() => {
@@ -12,7 +14,19 @@ export default function Login({ onLogin, onForgot }) {
   }, []);
 
   return (
-    <div className={`login ${enter ? 'enter' : ''}`}>
+    <div
+      className={`login ${enter ? 'enter' : ''}${cardHovered ? ' card-hovered' : ''}`}
+      style={
+        cardHovered
+          ? {
+              backgroundImage: `url(${bgPassRecov})`,
+              backgroundSize: 'cover',
+              backgroundPosition: 'center',
+              backgroundRepeat: 'no-repeat',
+            }
+          : undefined
+      }
+    >
       <div className="stage">
         <div className="hero">
           <img
@@ -27,7 +41,11 @@ export default function Login({ onLogin, onForgot }) {
             <div className="sub bottom">COMMUNICATIONS TECHNOLOGY</div>
           </div>
         </div>
-        <div className="card">
+        <div
+          className="card"
+          onMouseEnter={() => setCardHovered(true)}
+          onMouseLeave={() => setCardHovered(false)}
+        >
           <div className="title">Login</div>
           <form
             className="form"

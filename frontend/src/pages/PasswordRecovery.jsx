@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import './login.css';
-import bgPassword from '../assets/bgforpassword.png';
+import bgPassRecov from '../assets/bgpassrecov.png';
 
 export default function PasswordRecovery({ onBack }) {
   const [enter, setEnter] = useState(false);
@@ -17,13 +17,11 @@ export default function PasswordRecovery({ onBack }) {
   }
 
   return (
-    <div className={`recovery ${enter ? 'enter' : ''}`}>
+    <div
+      className={`recovery ${enter ? 'enter' : ''}`}
+      style={{ backgroundImage: `url(${bgPassRecov})` }}
+    >
       <div className="stage">
-        <div
-          className="recovery-bg"
-          style={{ backgroundImage: `url(${bgPassword})` }}
-          aria-hidden="true"
-        />
         <div className="hero">
           <img
             className="seal"
