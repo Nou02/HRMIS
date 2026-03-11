@@ -6,7 +6,6 @@ export default function Login({ onLogin, onForgot }) {
   const [enter, setEnter] = useState(false);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
   useEffect(() => {
     const t = setTimeout(() => setEnter(true), 50);
     return () => clearTimeout(t);
@@ -34,7 +33,6 @@ export default function Login({ onLogin, onForgot }) {
             className="form"
             onSubmit={async (e) => {
               e.preventDefault();
-              setError('');
               try {
                 const res = await fetch(`${API_BASE}/api/auth/login`, {
                   method: 'POST',
@@ -43,13 +41,11 @@ export default function Login({ onLogin, onForgot }) {
                 });
                 const acc = await res.json();
                 if (!res.ok) {
-                  setError(acc.error === 'auth_db_error' ? 'Database connection error' : 'Invalid username or password');
                   return;
                 }
                 localStorage.setItem('hrmisUser', JSON.stringify(acc));
                 onLogin?.();
-              } catch (e) {
-                setError('Unable to contact server');
+              } catch {
               }
             }}
           >
