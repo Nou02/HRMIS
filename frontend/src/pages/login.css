@@ -1,9 +1,19 @@
 .login {
+  position: relative;
   height: 100vh;
   background: #f3f4f6;
   overflow: hidden;
 }
+.login.card-hovered::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  z-index: 0;
+  pointer-events: none;
+}
 .recovery {
+  position: relative;
   height: 100vh;
   background: #f3f4f6;
   background-size: cover;
@@ -16,13 +26,23 @@
 .recovery.enter {
   opacity: 1;
 }
+.recovery::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  z-index: 0;
+  pointer-events: none;
+}
 .recovery .stage {
   position: relative;
   height: 100%;
+  z-index: 1;
 }
 .login .stage {
   position: relative;
   height: 100%;
+  z-index: 1;
 }
 .login .hero {
   position: absolute;
