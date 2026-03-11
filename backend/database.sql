@@ -106,10 +106,14 @@ CREATE TABLE IF NOT EXISTS accounts (
   id BIGINT AUTO_INCREMENT PRIMARY KEY,
   username VARCHAR(80) NOT NULL UNIQUE,
   password_hash VARCHAR(255) NOT NULL,
+  email VARCHAR(120),
   role VARCHAR(40),
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
 CREATE INDEX idx_accounts_username ON accounts(username);
 CREATE INDEX idx_accounts_role ON accounts(role);
+
+-- INSERT INITIAL ADMIN ACCOUNT (Optional, use your preferred username/password)
+-- INSERT INTO accounts (username, password_hash, role, email) VALUES ('admin', 'admin123', 'admin', 'admin@example.com');
 

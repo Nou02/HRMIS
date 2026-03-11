@@ -221,7 +221,7 @@ export default function GeneralPayroll() {
             </div>
             <form onSubmit={(e) => {
               e.preventDefault();
-              fetch(`http://localhost:5174/api/payroll/records/${encodeURIComponent(editForm.employeeId)}`, {
+              fetch(`${API_BASE}/api/payroll/records/${encodeURIComponent(editForm.employeeId)}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -239,7 +239,7 @@ export default function GeneralPayroll() {
                   const params = new URLSearchParams();
                   if (query) params.set('q', query);
                   if (nameSortAZ) params.set('sort', 'name_asc');
-                  fetch(`http://localhost:5174/api/payroll/records${params.toString() ? `?${params.toString()}` : ''}`)
+                  fetch(`${API_BASE}/api/payroll/records${params.toString() ? `?${params.toString()}` : ''}`)
                     .then((r) => r.json())
                     .then(setRecords)
                     .catch(() => {});

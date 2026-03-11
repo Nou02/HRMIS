@@ -1,7 +1,17 @@
-require('dotenv').config();
+const path = require('path');
+const dotenv = require('dotenv');
+const envPath = path.join(__dirname, '.env');
+const envResult = dotenv.config({ path: envPath });
+
+if (envResult.error) {
+  console.error('Failed to load .env from:', envPath);
+} else {
+  console.log('.env loaded successfully from:', envPath);
+  console.log('DB_HOST is set to:', process.env.DB_HOST);
+}
+
 const express = require('express');
 const cors = require('cors');
-const path = require('path');
 const fs = require('fs');
 const multer = require('multer');
 

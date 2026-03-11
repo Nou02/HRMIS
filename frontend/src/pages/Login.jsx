@@ -2,11 +2,10 @@ import React, { useEffect, useState } from 'react';
 import './login.css';
 import { API_BASE } from '../lib/api';
 
-export default function Login({ onLogin }) {
+export default function Login({ onLogin, onForgot }) {
   const [enter, setEnter] = useState(false);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
   useEffect(() => {
     const t = setTimeout(() => setEnter(true), 50);
     return () => clearTimeout(t);
@@ -34,30 +33,27 @@ export default function Login({ onLogin }) {
             className="form"
             onSubmit={async (e) => {
               e.preventDefault();
-              setError('');
               try {
                 const res = await fetch(`${API_BASE}/api/auth/login`, {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({ username, password }),
                 });
+                const acc = await res.json();
                 if (!res.ok) {
-                  setError('Invalid username or password');
                   return;
                 }
-                const acc = await res.json();
                 localStorage.setItem('hrmisUser', JSON.stringify(acc));
                 onLogin?.();
               } catch {
-                setError('Unable to contact server');
               }
             }}
           >
             <label>
-              <span>Username</span>
+              <span>Username or Email</span>
               <input
                 type="text"
-                placeholder="Enter username"
+                placeholder="Enter username or email"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
               />
@@ -71,8 +67,16 @@ export default function Login({ onLogin }) {
                 onChange={(e) => setPassword(e.target.value)}
               />
             </label>
-            {error && <div style={{ color: '#dc2626', fontSize: 12 }}>{error}</div>}
-            <button type="submit">Login</button>
+            <button type="submit" className="submit" aria-label="Login">→</button>
+            <div className="forgot">
+              <button
+                type="button"
+                className="link"
+                onClick={() => onForgot?.()}
+              >
+                Forgot Password?
+              </button>
+            </div>
           </form>
         </div>
       </div>

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { API_BASE } from '../../lib/api';
 import '../Compensation/compensation.css';
 
 export default function ReportsTimeKeeping() {
@@ -8,7 +9,7 @@ export default function ReportsTimeKeeping() {
   const [sortNameAZ, setSortNameAZ] = useState(false);
   const [statusFilter, setStatusFilter] = useState('');
   const [selectedDate, setSelectedDate] = useState(() => {
-    const d = new Date();
+    const d = new Date(); 
     const yyyy = d.getFullYear();
     const mm = String(d.getMonth() + 1).padStart(2, '0');
     const dd = String(d.getDate()).padStart(2, '0');
@@ -18,7 +19,7 @@ export default function ReportsTimeKeeping() {
   const [summary, setSummary] = useState(null);
 
   React.useEffect(() => {
-    fetch('http://localhost:5174/api/timekeeping/summary')
+    fetch(`${API_BASE}/api/timekeeping/summary`)
       .then((r) => r.json())
       .then(setSummary)
       .catch(() => {});
@@ -29,7 +30,7 @@ export default function ReportsTimeKeeping() {
     if (query) params.set('q', query);
     if (sortNameAZ) params.set('sort', 'name_asc');
     if (statusFilter) params.set('status', statusFilter);
-    fetch(`http://localhost:5174/api/timekeeping${params.toString() ? `?${params.toString()}` : ''}`)
+    fetch(`${API_BASE}/api/timekeeping${params.toString() ? `?${params.toString()}` : ''}`)
       .then((r) => r.json())
       .then(setRecords)
       .catch(() => setRecords([]));

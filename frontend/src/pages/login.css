@@ -1,7 +1,31 @@
 .login {
   height: 100vh;
-  background: #ffffff;
+  background: #f3f4f6;
   overflow: hidden;
+}
+.recovery {
+  height: 100vh;
+  background: #f3f4f6;
+  overflow: hidden;
+  opacity: 0;
+  transition: opacity 400ms ease;
+}
+.recovery.enter {
+  opacity: 1;
+}
+.recovery .stage {
+  position: relative;
+  height: 100%;
+}
+.recovery .recovery-bg {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 50%;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  filter: saturate(1.05) contrast(1.02);
+  z-index: 0;
 }
 .login .stage {
   position: relative;
@@ -19,7 +43,7 @@
   z-index: 1;
 }
 .login.enter .hero {
-  transform: translate(calc(-50% - 22vw), -50%);
+  transform: translate(calc(-50% - 18vw), -50%);
 }
 .login .seal {
   width: 180px;
@@ -53,32 +77,190 @@
 }
 .login .card {
   position: absolute;
-  right: 12%;
+  right: 15%;
   top: 50%;
   transform: translateY(-50%) translateX(36px);
   opacity: 0;
   width: 360px;
   background: #ffffff;
+  border: 1px solid transparent;
   border-radius: 12px;
   box-shadow: 0 10px 30px rgba(0,0,0,0.1);
   padding: 20px 20px 16px;
-  transition: transform 600ms cubic-bezier(0.22, 1, 0.36, 1), opacity 600ms ease, box-shadow 0.2s ease;
+  transition: transform 600ms cubic-bezier(0.22, 1, 0.36, 1), opacity 600ms ease, box-shadow 0.2s ease, border-color 0.2s ease;
   z-index: 1;
 }
 .login.enter .card {
   transform: translateY(-50%) translateX(0px);
   opacity: 1;
 }
+.recovery .card {
+  position: absolute;
+  right: 15%;
+  top: 50%;
+  transform: translateY(-50%) translateX(36px);
+  opacity: 0;
+  width: 360px;
+  background: #ffffff;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+  padding: 20px 20px 16px;
+  transition: transform 600ms cubic-bezier(0.22, 1, 0.36, 1), opacity 600ms ease, box-shadow 0.2s ease, border-color 0.2s ease;
+  z-index: 1;
+}
+.recovery.enter .card {
+  transform: translateY(-50%) translateX(0px);
+  opacity: 1;
+}
+.recovery .card:hover {
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.12);
+}
+.recovery .card:hover,
+.recovery .card:focus-within {
+  border-color: rgba(37, 99, 235, 0.25);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.14);
+}
+.recovery .card:hover {
+  transform: translateY(-50%) translateX(36px) scale(1.02);
+}
+.recovery.enter .card:hover {
+  transform: translateY(-50%) translateX(0px) scale(1.02);
+}
+.recovery .card:focus-within {
+  transform: translateY(-50%) translateX(36px) scale(1.015);
+}
+.recovery.enter .card:focus-within {
+  transform: translateY(-50%) translateX(0px) scale(1.015);
+}
+.recovery .hero-logo {
+  position: absolute;
+  left: 24px;
+  top: 24px;
+}
+.recovery .hero {
+  position: absolute;
+  left: 24px;
+  top: 24px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  z-index: 1;
+}
+.recovery .hero .seal {
+  width: 80px;
+  height: 80px;
+  object-fit: contain;
+  user-select: none;
+}
+.recovery .title-block {
+  display: flex;
+  flex-direction: column;
+}
+.recovery .brand {
+  font-size: 42px;
+  font-weight: 800;
+  letter-spacing: 2px;
+  color: #ffffff;
+  line-height: 0.9;
+}
+.recovery .sub {
+  margin-top: 6px;
+  font-size: 11px;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  color: #1e3a8a;
+}
+.recovery .sub.top {
+  margin-top: 2px;
+}
+.recovery .sub.bottom {
+  margin-top: 0;
+}
+.recovery .hero-logo .seal {
+  width: 80px;
+  height: 80px;
+  object-fit: contain;
+  user-select: none;
+}
+.recovery .forgot-banner {
+  position: absolute;
+  left: 96px;
+  top: 70%;
+  transform: translateY(calc(-50% + 48px));
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  z-index: 1;
+}
+.recovery .forgot-banner div {
+  text-transform: uppercase;
+  font-size: clamp(40px, 7vw, 96px);
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  color: #ffffff;
+  line-height: 0.92;
+}
+.recovery .divider {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background-color: #000;
+  z-index: 1;
+  display: none;
+}
+.recovery .footer-links {
+  position: absolute;
+  left: 50px;
+  bottom: 50px;
+  display: flex;
+  gap: 20px;
+}
+.recovery .footer-links a {
+  font-size: 12px;
+  text-transform: uppercase;
+  color: #6b7280;
+  text-decoration: none;
+  letter-spacing: 0.6px;
+  font-weight: 700;
+}
+.recovery .footer-links a:hover {
+  color: #374151;
+  text-decoration: underline;
+}
 .login .card:hover {
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.12);
 }
+.login .card:hover,
+.login .card:focus-within {
+  border-color: rgba(37, 99, 235, 0.25);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.14);
+}
+.login .card:hover {
+  transform: translateY(-50%) translateX(36px) scale(1.02);
+}
+.login.enter .card:hover {
+  transform: translateY(-50%) translateX(0px) scale(1.02);
+}
+.login .card:focus-within {
+  transform: translateY(-50%) translateX(36px) scale(1.015);
+}
+.login.enter .card:focus-within {
+  transform: translateY(-50%) translateX(0px) scale(1.015);
+}
 .login .title {
-  font-size: 20px;
+  font-size: 35px;
   font-weight: 700;
   color: #0f172a;
   margin-bottom: 12px;
 }
 .login .form {
+  display: grid;
+  gap: 12px;
+}
+.recovery .form {
   display: grid;
   gap: 12px;
 }
@@ -104,6 +286,134 @@
   font-weight: 600;
   cursor: pointer;
 }
-.login .form button:hover {
+.login .form button:not(.link):hover {
   background: #1d4ed8;
+}
+.login .form button.submit {
+  margin-top: 8px;
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
+  border: 1px solid #e5e7eb;
+  background: #ffffff;
+  color: #9ca3af;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.04);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  font-weight: 600;
+  cursor: pointer;
+  justify-self: center;
+}
+.login .form button.submit:hover {
+  background: #f9fafb;
+  border-color: #d1d5db;
+  box-shadow: 0 3px 6px rgba(0,0,0,0.06);
+}
+.login .form .forgot {
+  margin-top: 4px;
+  text-align: center;
+}
+.login .form .link {
+  background: transparent;
+  border: none;
+  color: #2563eb;
+  padding: 0;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.recovery .title {
+  font-size: 30px;
+  font-weight: 700;
+  color: #0f172a;
+  margin-bottom: 12px;
+}
+.recovery .subtitle {
+  margin-top: -6px;
+  margin-bottom: 10px;
+  color: #6b7280;
+  font-size: 17px;
+  text-align: center;
+}
+.recovery .form label {
+  display: grid;
+  gap: 8px;
+  color: #334155;
+  font-size: 13px;
+}
+.recovery .form input {
+  padding: 10px 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  font-size: 14px;
+}
+.recovery .form button {
+  margin-top: 8px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: none;
+  background: #2563eb;
+  color: white;
+  font-weight: 600;
+  cursor: pointer;
+}
+.recovery .form button:not(.link):hover {
+  background: #1d4ed8;
+}
+.recovery .form .forgot {
+  margin-top: 4px;
+  text-align: center;
+}
+.recovery .form .link {
+  background: transparent;
+  border: none;
+  color: #2563eb;
+  padding: 0;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.recovery .form button.submit {
+  margin-top: 8px;
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
+  border: 1px solid #e5e7eb;
+  background: #ffffff;
+  color: #9ca3af;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.04);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  font-weight: 600;
+  cursor: pointer;
+  justify-self: center;
+}
+.recovery .form button.submit:hover {
+  background: #f9fafb;
+  border-color: #d1d5db;
+  box-shadow: 0 3px 6px rgba(0,0,0,0.06);
+}
+
+@media (max-width: 900px) {
+  .recovery .recovery-bg {
+    display: none;
+  }
+  .recovery .divider {
+    display: none;
+  }
+  .recovery .card {
+    right: 50%;
+    transform: translateY(-50%) translateX(50%);
+  }
+  .recovery.enter .card {
+    transform: translateY(-50%) translateX(50%);
+  }
+  .recovery .forgot-banner {
+    display: none;
+  }
 }
