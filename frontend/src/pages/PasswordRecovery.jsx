@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import './login.css';
-import bgPassword from '../assets/bgpassword.png';
+import bgPassword from '../assets/bgforpassword.png';
 
 export default function PasswordRecovery({ onBack }) {
   const [enter, setEnter] = useState(false);
