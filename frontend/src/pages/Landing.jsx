@@ -7,13 +7,14 @@ export default function Landing({ onEnter }) {
     const t = setTimeout(() => setEnter(true), 30);
     return () => clearTimeout(t);
   }, []);
+  const onKeyDown = (e) => (e.key === 'Enter' ? onEnter?.() : null);
   return (
     <div
       className={`landing ${enter ? 'enter' : ''}`}
       onClick={onEnter}
       role="button"
       tabIndex={0}
-      onKeyDown={(e) => (e.key === 'Enter' ? onEnter() : null)}
+      onKeyDown={onKeyDown}
     >
       <div className="landing-content">
         <img

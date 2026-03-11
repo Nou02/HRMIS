@@ -13,20 +13,27 @@ export default function Login({ onLogin, onForgot }) {
     return () => clearTimeout(t);
   }, []);
 
+  const bgTransition = 'opacity var(--ui-duration) var(--ui-ease)';
+
   return (
-    <div
-      className={`login ${enter ? 'enter' : ''}${cardHovered ? ' card-hovered' : ''}`}
-      style={
-        cardHovered
-          ? {
-              backgroundImage: `url(${bgPassRecov})`,
-              backgroundSize: 'cover',
-              backgroundPosition: 'center',
-              backgroundRepeat: 'no-repeat',
-            }
-          : undefined
-      }
-    >
+    <div className={`login ${enter ? 'enter' : ''}${cardHovered ? ' card-hovered' : ''}`}>
+      <div
+        className="login-bg"
+        style={{
+          backgroundImage: `url(${bgPassRecov})`,
+          opacity: cardHovered ? 1 : 0,
+          transition: bgTransition,
+        }}
+        aria-hidden="true"
+      />
+      <div
+        className="login-overlay"
+        style={{
+          opacity: cardHovered ? 1 : 0,
+          transition: bgTransition,
+        }}
+        aria-hidden="true"
+      />
       <div className="stage">
         <div className="hero">
           <img

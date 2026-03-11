@@ -4,12 +4,20 @@
   background: #f3f4f6;
   overflow: hidden;
 }
-.login.card-hovered::before {
-  content: '';
+.login-bg {
   position: absolute;
   inset: 0;
-  background: rgba(0, 0, 0, 0.4);
   z-index: 0;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  pointer-events: none;
+}
+.login-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background: rgba(0, 0, 0, 0.4);
   pointer-events: none;
 }
 .recovery {
@@ -21,7 +29,7 @@
   background-repeat: no-repeat;
   overflow: hidden;
   opacity: 0;
-  transition: opacity 400ms ease;
+  transition: opacity var(--ui-duration) var(--ui-ease);
 }
 .recovery.enter {
   opacity: 1;
@@ -52,7 +60,7 @@
   display: flex;
   align-items: center;
   gap: 24px;
-  transition: transform 600ms cubic-bezier(0.22, 1, 0.36, 1);
+  transition: transform var(--ui-duration) cubic-bezier(0.22, 1, 0.36, 1);
   z-index: 1;
 }
 .login.enter .hero {
@@ -74,7 +82,7 @@
   letter-spacing: 2px;
   color: #1e40af;
   line-height: 0.85;
-  transition: color 0.3s ease;
+  transition: color var(--ui-duration) var(--ui-ease);
 }
 .login.card-hovered .brand {
   color: #ffffff;
@@ -85,7 +93,7 @@
   letter-spacing: 1.2px;
   text-transform: uppercase;
   color: #1e3a8a;
-  transition: color 0.3s ease;
+  transition: color var(--ui-duration) var(--ui-ease);
 }
 .login.card-hovered .sub {
   color: #ffffff;
@@ -108,7 +116,7 @@
   border-radius: 12px;
   box-shadow: 0 10px 30px rgba(0,0,0,0.1);
   padding: 20px 20px 16px;
-  transition: transform 600ms cubic-bezier(0.22, 1, 0.36, 1), opacity 600ms ease, box-shadow 0.2s ease, border-color 0.2s ease;
+  transition: transform var(--ui-duration) cubic-bezier(0.22, 1, 0.36, 1), opacity var(--ui-duration) var(--ui-ease), box-shadow var(--ui-duration) var(--ui-ease), border-color var(--ui-duration) var(--ui-ease);
   z-index: 1;
 }
 .login.enter .card {
@@ -127,7 +135,7 @@
   border-radius: 12px;
   box-shadow: 0 10px 30px rgba(0,0,0,0.1);
   padding: 20px 20px 16px;
-  transition: transform 600ms cubic-bezier(0.22, 1, 0.36, 1), opacity 600ms ease, box-shadow 0.2s ease, border-color 0.2s ease;
+  transition: transform var(--ui-duration) cubic-bezier(0.22, 1, 0.36, 1), opacity var(--ui-duration) var(--ui-ease), box-shadow var(--ui-duration) var(--ui-ease), border-color var(--ui-duration) var(--ui-ease);
   z-index: 1;
 }
 .recovery.enter .card {

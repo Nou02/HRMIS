@@ -4,6 +4,8 @@
   font-weight: 400;
   color: #0f172a;
   background-color: #f8fafc;
+  --ui-duration: 1s;
+  --ui-ease: ease-in-out;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
