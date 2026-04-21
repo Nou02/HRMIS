@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import './login.css';
-import bgPassRecov from '../assets/bgpassrecov.png';
+import './Login_Password.css';
+import DICTPeeps from '../assets/DICTPeeps.jpg';
 
 export default function PasswordRecovery({ onBack }) {
   const [enter, setEnter] = useState(false);
   const [email, setEmail] = useState('');
+
   useEffect(() => {
     const t = setTimeout(() => setEnter(true), 50);
     return () => clearTimeout(t);
@@ -12,15 +13,22 @@ export default function PasswordRecovery({ onBack }) {
 
   function submit(e) {
     e.preventDefault();
-    if (!email) return;
+    if (!email.trim()) return;
     alert('If this email exists, a reset link has been sent.');
   }
 
   return (
-    <div
-      className={`recovery ${enter ? 'enter' : ''}`}
-      style={{ backgroundImage: `url(${bgPassRecov})` }}
-    >
+    <div className={`recovery ${enter ? 'enter' : ''}`}>
+      <div
+        className="login-bg"
+        style={{
+          backgroundImage: `url(${DICTPeeps})`,
+          opacity: 1,
+          zIndex: 0
+        }}
+      />
+      <div className="login-overlay" style={{ opacity: 1, zIndex: 0 }} />
+
       <div className="stage">
         <div className="hero">
           <img
@@ -34,22 +42,25 @@ export default function PasswordRecovery({ onBack }) {
           </div>
         </div>
         <div className="card">
-          <div className="title">Enter your Email</div>
-          <div className="subtitle">The one that you use to sign in with.</div>
+          <div className="title">Find your Email Account</div>
+          <div className="subtitle">Enter your email that you use to sign in with.</div>
           <form className="form" onSubmit={submit}>
             <label>
-              <span>Email</span>
               <input
                 type="email"
-                placeholder="Enter email"
+                placeholder="Email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
               />
             </label>
-            <button type="submit" className="submit" aria-label="Send">→</button>
+            <button type="submit" className="submit" aria-label="Send">
+              Continue
+            </button>
             <div className="forgot">
-              <button type="button" className="link" onClick={onBack}>Back to Login</button>
+              <button type="button" className="link" onClick={onBack}>
+                Back to Login
+              </button>
             </div>
           </form>
         </div>

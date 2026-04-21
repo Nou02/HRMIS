@@ -6,23 +6,46 @@
   background-color: #f8fafc;
   --ui-duration: 1s;
   --ui-ease: ease-in-out;
+  --primary-blue: #1e40af;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
-* {
-  box-sizing: border-box;
-}
+
+* { box-sizing: border-box; }
+
 body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
   background: #f8fafc;
 }
-a {
-  color: inherit;
+
+.app-container { display: flex; width: 100%; }
+
+.main-viewport {
+  flex-grow: 1;
+  min-height: 100vh;
+  background-color: #f8fafc;
 }
-button {
-  font-family: inherit;
+
+::selection {
+  background-color: rgba(30, 64, 175, 0.2);
+  color: var(--primary-blue);
 }
+
+::-webkit-scrollbar { width: 8px; }
+::-webkit-scrollbar-track { background: #f8fafc; }
+::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+@keyframes fadeInSlideUp {
+  from { opacity: 0; transform: translateY(15px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.page-fade-in { animation: fadeInSlideUp 0.4s ease-out forwards; }
+
+button { font-family: inherit; border: none; outline: none; cursor: pointer; }
+a { color: inherit; text-decoration: none; }

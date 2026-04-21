@@ -1,14 +1,34 @@
-import React, { useState } from 'react';
-import './compensation.css';
+import React, { useState, useEffect, useRef } from 'react';
+import './Payslips.css';
 import { API_BASE } from '../../lib/api';
+import { Search, X, Filter } from 'lucide-react';
+
+function Metric({ label, value, icon }) {
+  return (
+    <div className="metric">
+      <div className="metric-content">
+        <div className="metric-label">{label}</div>
+        <div className="metric-value">{value}</div>
+      </div>
+      <div className="metric-icon">{icon}</div>
+    </div>
+  );
+}
 
 export default function Payslips() {
   const [query, setQuery] = useState('');
   const [filtersOpen, setFiltersOpen] = useState(false);
-  const [sortNameAZ, setSortNameAZ] = useState(false);
+  const [nameSort, setNameSort] = useState('none');
   const [list, setList] = useState([]);
   const [summary, setSummary] = useState(null);
   const [modalOpen, setModalOpen] = useState(false);
+  const [fullImageView, setFullImageView] = useState(null);
+
+  const [localPhotos] = useState(() => {
+    const saved = localStorage.getItem('hrmis_employee_photos');
+    return saved ? JSON.parse(saved) : {};
+  });
+
   const [form, setForm] = useState({
     uid: '',
     name: '',
@@ -18,22 +38,42 @@ export default function Payslips() {
     period: '',
   });
 
+  const filterRef = useRef(null);
+  const searchInputRef = useRef(null);
+
+  const displayCellValue = (val) => {
+    const s = String(val ?? '').trim();
+    if (s === '0' || s === '0.00' || s === '₱0' || s === '₱0.00' || s === '') return '-';
+    return val;
+  };
+
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (filterRef.current && !filterRef.current.contains(event.target)) {
+        setFiltersOpen(false);
+      }
+    }
+    if (filtersOpen) document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [filtersOpen]);
+
   const loadSummary = () => {
     fetch(`${API_BASE}/api/payroll/summary`)
       .then((r) => r.json())
       .then(setSummary)
       .catch(() => {});
   };
+
   const loadList = () => {
     const params = new URLSearchParams();
     if (query) params.set('q', query);
-    if (sortNameAZ) params.set('sort', 'name_asc');
+
     fetch(`${API_BASE}/api/payslips${params.toString() ? `?${params.toString()}` : ''}`)
       .then((r) => r.json())
-      .then((list) => {
-        if (Array.isArray(list) && list.length > 0) {
-          setList(list);
-        } else {
+      .then((data) => {
+        let items = Array.isArray(data) ? data : [];
+        
+        if (items.length === 0 && !query) {
           fetch(`${API_BASE}/api/employees`)
             .then((r) => r.json())
             .then((emps) => {
@@ -42,50 +82,72 @@ export default function Payslips() {
                 uid: e.uid,
                 name: e.name,
                 role: '',
-                gross: '—',
-                bonus: '—',
-                deductions: '—',
-                netPay: '—',
-                period: '—',
+                gross: '-',
+                bonus: '-',
+                deductions: '-',
+                netPay: '-',
+                period: '-',
                 status: 'Draft',
+                statusClass: 'draft'
               }));
-              setList(rows);
+              applySort(rows);
             })
             .catch(() => setList([]));
+        } else {
+          applySort(items);
         }
       })
       .catch(() => {});
   };
-  React.useEffect(() => {
+
+  const applySort = (items) => {
+    const sorted = [...items].sort((a, b) => {
+      if (nameSort !== 'none') {
+        if (nameSort === 'asc') return (a.name || '').localeCompare(b.name || '');
+        if (nameSort === 'desc') return (b.name || '').localeCompare(a.name || '');
+      }
+
+      const netA = String(a.netPay).replace(/[^\d.-]/g, '');
+      const netB = String(b.netPay).replace(/[^\d.-]/g, '');
+      const valA = parseFloat(netA) || 0;
+      const valB = parseFloat(netB) || 0;
+
+      if (valA > 0 && valB <= 0) return -1;
+      if (valA <= 0 && valB > 0) return 1;
+
+      return 0;
+    });
+    setList(sorted);
+  };
+
+  useEffect(() => {
     loadSummary();
     loadList();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [query, sortNameAZ]);
+  }, [query, nameSort]);
+
+  const handleClearSearch = () => {
+    setQuery('');
+    if (searchInputRef.current) searchInputRef.current.focus();
+  };
 
   function openProceed(p) {
     setForm({
       uid: p.uid,
       name: p.name,
-      gross: p.gross === '—' ? '' : String(p.gross).replace(/[^\d.-]/g, ''),
-      bonus: p.bonus === '—' ? '' : String(p.bonus).replace(/[^\d.-]/g, ''),
-      deductions: p.deductions === '—' ? '' : String(p.deductions).replace(/[^\d.-]/g, ''),
+      gross: p.gross === '-' || p.gross === '—' ? '' : String(p.gross).replace(/[^\d.-]/g, ''),
+      bonus: p.bonus === '-' || p.bonus === '—' ? '' : String(p.bonus).replace(/[^\d.-]/g, ''),
+      deductions: p.deductions === '-' || p.deductions === '—' ? '' : String(p.deductions).replace(/[^\d.-]/g, ''),
       period: p.period || '',
     });
     setModalOpen(true);
   }
+
   function confirmPayslip(e) {
     e.preventDefault();
     fetch(`${API_BASE}/api/payslips/${encodeURIComponent(form.uid)}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        name: form.name,
-        gross: form.gross,
-        bonus: form.bonus,
-        deductions: form.deductions,
-        period: form.period,
-        confirm: true,
-      }),
+      body: JSON.stringify({ ...form, confirm: true }),
     })
       .then((r) => r.json())
       .then(() => {
@@ -97,18 +159,30 @@ export default function Payslips() {
 
   return (
     <div className="screen">
+      {fullImageView && (
+        <div className="image-viewer-overlay" onClick={() => setFullImageView(null)}>
+          <button className="viewer-close">✕</button>
+          <img src={fullImageView} alt="Full View" />
+        </div>
+      )}
+
       <div className="screen-header">
-        <div className="title">Payslips</div>
+        <div className="header-text">
+          <div className="title">Payslips</div>
+          <div className="page-description">Manage and issue employee payslips for the current period</div>
+        </div>
         <div className="actions">
-          <div className="btn light">{summary?.period || '—'}</div>
+          {summary?.period && summary.period !== '-' && summary.period !== '—' && (
+          <div className="btn light period-display">{summary.period}</div>
+          )}
           <div className="avatar" />
         </div>
       </div>
 
       <div className="grid-3">
-        <Metric label="Total Net Payroll" value={summary?.basePayroll ?? '—'} />
-        <Metric label="Total Employees Paid" value={summary?.totalEmployees ?? '—'} />
-        <Metric label="Period" value={summary?.period ?? '—'} />
+        <Metric label="Total Net Payroll" value={summary?.basePayroll ?? '0.00'} icon="💵" />
+        <Metric label="Total Employees Paid" value={summary?.totalEmployees ?? '0'} icon="👥" />
+        <Metric label="Period" value={displayCellValue(summary?.period)} icon="📅" />
       </div>
 
       <div className="card">
@@ -116,112 +190,145 @@ export default function Payslips() {
           <div className="card-title">Payslip List</div>
           <div className="card-actions">
             <div className="search">
-              <span>🔍</span>
+              <Search size={18} className="search-icon" />
               <input
-                placeholder="Search employee"
+                ref={searchInputRef}
+                placeholder="Search UID, Name, ..."
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
               />
+              {query && (
+                <button className="search-clear-btn" onClick={handleClearSearch}>
+                  <X size={14} />
+                </button>
+              )}
             </div>
-            <button className="btn light" onClick={() => setFiltersOpen((v) => !v)}>Filters</button>
+
+            <div className="dropdown" ref={filterRef}>
+              <button className="btn light filter-btn" onClick={() => setFiltersOpen((v) => !v)}>
+                <Filter size={18} />
+              </button>
+              {filtersOpen && (
+                <div className="dropdown-menu">
+                  <div className="form-col">
+                    <label className="field-label">Name</label>
+                    <select
+                      className="select"
+                      value={nameSort}
+                      onChange={(e) => setNameSort(e.target.value)}
+                    >
+                      <option value="none">None</option>
+                      <option value="asc">Ascending (A–Z)</option>
+                      <option value="desc">Descending (Z–A)</option>
+                    </select>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </div>
-        {filtersOpen && (
-          <div className="dropdown-menu">
-            <div className="form-col">
-              <label>Name (Sort A–Z)</label>
-              <select className="select" value={sortNameAZ ? 'az' : 'none'} onChange={(e) => setSortNameAZ(e.target.value === 'az')}>
-                <option value="none">None</option>
-                <option value="az">A–Z</option>
-              </select>
-            </div>
-          </div>
-        )}
-        <div className="list" style={{ padding: 16 }}>
-          {(list.length ? list : Array.from({ length: 3 }, (_, i) => ({ key: i }))).map((item) => {
-            if (!list.length) {
-              return (
-                <div className="list-item" key={item.key}>
+
+        <div className="list-container" style={{ padding: 24 }}>
+          {list.length > 0 ? (
+            <div className="list">
+              {list.map((p) => (
+                <div className="list-item" key={p.id || p.uid}>
                   <div className="left">
-                    <div className="avatar" />
-                    <div>
-                      <div>-</div>
-                      <div className="details">EMP-— · —</div>
-                      <div className="details">Gross: — · Bonus: — · Deductions: —</div>
+                    <div
+                      className="employee-avatar clickable-avatar avatar-border"
+                      onClick={() => localPhotos[p.uid] && setFullImageView(localPhotos[p.uid])}
+                    >
+                       {localPhotos[p.uid] ? (
+                         <img src={localPhotos[p.uid]} alt="" />
+                       ) : (
+                         <span className="employee-avatar-initials">{(p.name || '?').charAt(0).toUpperCase()}</span>
+                       )}
+                    </div>
+                    <div className="info-block">
+                      <div className="employee-name-text">{p.name}</div>
+                      <div className="details">
+                        UID: <span className="uid-text">{p.uid}</span> · {p.role || 'Staff'}
+                      </div>
+                      <div className="details-row">
+                        <span>Gross: <b>{displayCellValue(p.gross)}</b></span>
+                        <span className="dot">·</span>
+                        <span>Bonus: <b>{displayCellValue(p.bonus)}</b></span>
+                        <span className="dot">·</span>
+                        <span>Deductions: <b>{displayCellValue(p.deductions)}</b></span>
+                      </div>
                     </div>
                   </div>
                   <div className="right">
-                    <div className="amount">—</div>
-                    <div className="details">Period: — · Status: —</div>
+                    <div className="amount">{displayCellValue(p.netPay)}</div>
+                    <div className="details" style={{ marginBottom: '8px' }}>
+                      Period: {p.period || '-'} · <span className={`status-text ${String(p.status).toLowerCase()}`}>{p.status}</span>
+                    </div>
+                    <button className="btn primary small" onClick={() => openProceed(p)}>Proceed</button>
                   </div>
                 </div>
-              );
-            }
-            const p = item;
-            return (
-              <div className="list-item" key={p.id || p.uid}>
-                <div className="left">
-                  <div className="avatar" />
-                  <div>
-                    <div>{p.name}</div>
-                    <div className="details">{p.uid} · {p.role || ''}</div>
-                    <div className="details">Gross: {p.gross} · Bonus: {p.bonus} · Deductions: {p.deductions}</div>
-                  </div>
-                </div>
-                <div className="right">
-                  <div className="amount">{p.netPay}</div>
-                  <div className="details">Period: {p.period || ''} · Status: {p.status || ''}</div>
-                  <button className="btn primary" onClick={() => openProceed(p)}>Proceed</button>
-                </div>
-              </div>
-            );
-          })}
+              ))}
+            </div>
+          ) : (
+            <div className="no-records-row">No record(s) found/added</div>
+          )}
         </div>
       </div>
+
       {modalOpen && (
         <div className="modal-backdrop" onClick={() => setModalOpen(false)}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <div className="card-title">Payslip · {form.name}</div>
-              <button className="btn light" onClick={() => setModalOpen(false)}>Close</button>
+              <div className="card-title">Edit Payslip · {form.name}</div>
+              <button className="modal-close-x" onClick={() => setModalOpen(false)}>✕</button>
             </div>
             <form onSubmit={confirmPayslip}>
               <div className="form-row">
                 <div className="form-col">
-                  <label>Gross</label>
-                  <input className="input" value={form.gross} onChange={(e) => setForm({ ...form, gross: e.target.value })} />
+                  <label className="field-label">Gross Salary</label>
+                  <input
+                    className="input"
+                    placeholder="e.g. 25000"
+                    value={form.gross}
+                    onChange={(e) => setForm({ ...form, gross: e.target.value })}
+                  />
                 </div>
                 <div className="form-col">
-                  <label>Bonus</label>
-                  <input className="input" value={form.bonus} onChange={(e) => setForm({ ...form, bonus: e.target.value })} />
+                  <label className="field-label">Bonus / Incentives</label>
+                  <input
+                    className="input"
+                    placeholder="e.g. 1000"
+                    value={form.bonus}
+                    onChange={(e) => setForm({ ...form, bonus: e.target.value })}
+                  />
                 </div>
               </div>
               <div className="form-row">
                 <div className="form-col">
-                  <label>Deductions</label>
-                  <input className="input" value={form.deductions} onChange={(e) => setForm({ ...form, deductions: e.target.value })} />
+                  <label className="field-label">Total Deductions</label>
+                  <input
+                    className="input"
+                    placeholder="e.g. 500"
+                    value={form.deductions}
+                    onChange={(e) => setForm({ ...form, deductions: e.target.value })}
+                  />
                 </div>
                 <div className="form-col">
-                  <label>Period</label>
-                  <input className="input" type="date" value={form.period} onChange={(e) => setForm({ ...form, period: e.target.value })} />
+                  <label className="field-label">Pay Period Date</label>
+                  <input
+                    className="input"
+                    type="date"
+                    value={form.period}
+                    onChange={(e) => setForm({ ...form, period: e.target.value })}
+                  />
                 </div>
               </div>
               <div className="modal-actions">
-                <button type="submit" className="btn primary">Confirm</button>
+                <button type="submit" className="btn primary submit-btn">Confirm & Issue</button>
               </div>
             </form>
           </div>
         </div>
       )}
-    </div>
-  );
-}
-
-function Metric({ label, value }) {
-  return (
-    <div className="metric">
-      <div className="metric-label">{label}</div>
-      <div className="metric-value">{value}</div>
     </div>
   );
 }

@@ -1,22 +1,20 @@
-import React, { useState } from 'react';
+import React from 'react';
+import { LayoutDashboard, Users, DoorOpen, AlarmClockOff, Wallet, Receipt, Clock, LogOut, HandCoins, CalendarClock } from 'lucide-react';
 import './sidebar.css';
 
-function Item({ label, id, level = 0, active, onNavigate }) {
+function Item({ label, id, active, onNavigate, icon: Icon }) {
   return (
     <div
       onClick={() => onNavigate(id)}
-      className={`nav-item level-${level} ${active === id ? 'active' : ''}`}
+      className={`nav-item ${active === id ? 'active' : ''}`}
     >
-      {label}
+      {Icon && <Icon size={18} className="nav-icon" />}
+      <span className="nav-label">{label}</span>
     </div>
   );
 }
 
 export default function Sidebar({ active, onNavigate, onLogout }) {
-  const [open201, setOpen201] = useState(true);
-  const [openComp, setOpenComp] = useState(false);
-  const [openReports, setOpenReports] = useState(false);
-
   return (
     <aside className="sidebar">
       <div className="brand">
@@ -24,47 +22,60 @@ export default function Sidebar({ active, onNavigate, onLogout }) {
           className="brand-logo"
           src="https://commons.wikimedia.org/wiki/Special:FilePath/Department_of_Information_and_Communications_Technology_(DICT)_-_Seal_only.svg"
           alt="DICT Seal"
-          draggable="false"
         />
         <span className="brand-text">HRMIS</span>
       </div>
-      <div className="nav-group">
-        <Item label="Dashboard" id="dashboard" active={active} onNavigate={onNavigate} />
-      </div>
-      <div className="group-header" onClick={() => setOpen201(!open201)}>
-        <span className="caret">{open201 ? '▾' : '▸'}</span>
-        <span>201</span>
-      </div>
-      {open201 && (
-        <div className="nav-group">
-          <Item label="Employee's List" id="employees" level={1} active={active} onNavigate={onNavigate} />
-          <Item label="Gate Pass" id="gatepass" level={1} active={active} onNavigate={onNavigate} />
-          <Item label="Application" id="application" level={1} active={active} onNavigate={onNavigate} />
+
+      <div className="nav-container">
+        <Item
+          label="Dashboard"
+          id="dashboard"
+          active={active}
+          onNavigate={onNavigate}
+          icon={LayoutDashboard}
+        />
+
+        {/* 201 Employee Files Group */}
+        <div className="group-wrapper">
+          <div className="group-header">
+            <span>201 (Employee Files)</span>
+          </div>
+          <div className="nav-group">
+            <Item label="Employee Directory" id="employees" active={active} onNavigate={onNavigate} icon={Users} />
+            <Item label="Gate Passes" id="gatepass" active={active} onNavigate={onNavigate} icon={DoorOpen} />
+            <Item label="Time Off Requests" id="application" active={active} onNavigate={onNavigate} icon={AlarmClockOff} />
+          </div>
         </div>
-      )}
-      <div className="group-header" onClick={() => setOpenComp(!openComp)}>
-        <span className="caret">{openComp ? '▾' : '▸'}</span>
-        <span>Compensation</span>
-      </div>
-      {openComp && (
-        <div className="nav-group">
-          <Item label="General Payroll" id="payroll" level={1} active={active} onNavigate={onNavigate} />
-          <Item label="Pay slips" id="payslips" level={1} active={active} onNavigate={onNavigate} />
-          <Item label="Time Keeping" id="timekeeping" level={1} active={active} onNavigate={onNavigate} />
+
+        {/* Compensation Group */}
+        <div className="group-wrapper">
+          <div className="group-header">
+            <span>Compensation</span>
+          </div>
+          <div className="nav-group">
+            <Item label="General Payrolls" id="payroll" active={active} onNavigate={onNavigate} icon={Wallet} />
+            <Item label="Payslips" id="payslips" active={active} onNavigate={onNavigate} icon={Receipt} />
+            <Item label="Time Keeping" id="timekeeping" active={active} onNavigate={onNavigate} icon={Clock} />
+          </div>
         </div>
-      )}
-      <div className="group-header" onClick={() => setOpenReports(!openReports)}>
-        <span className="caret">{openReports ? '▾' : '▸'}</span>
-        <span>Reports</span>
-      </div>
-      {openReports && (
-        <div className="nav-group">
-          <Item label="Time Keeping" id="reports-time" level={1} active={active} onNavigate={onNavigate} />
-          <Item label="Compensation" id="reports-comp" level={1} active={active} onNavigate={onNavigate} />
+
+        {/* Reports Group */}
+        <div className="group-wrapper">
+          <div className="group-header">
+            <span>Reports</span>
+          </div>
+          <div className="nav-group">
+            <Item label="Attendance Logs" id="reports-time" active={active} onNavigate={onNavigate} icon={CalendarClock} />
+            <Item label="Compensation" id="reports-comp" active={active} onNavigate={onNavigate} icon={HandCoins} />
+          </div>
         </div>
-      )}
+      </div>
+
       <div className="sidebar-footer">
-        <button className="logout-button" onClick={onLogout}>Log out</button>
+        <button className="logout-button" onClick={onLogout}>
+          <LogOut size={18} />
+          <span>Logout</span>
+        </button>
       </div>
     </aside>
   );

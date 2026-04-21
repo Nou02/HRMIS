@@ -1,84 +1,120 @@
 :root {
-  --brand-blue: #1e40af;
+  --brand-blue: #002087;
   --text-dark: #0f172a;
+  --ui-duration: 0.8s;
 }
+
 .landing {
   height: 100vh;
   width: 100vw;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #ffffff;
+  background: #e8e9eb;
   cursor: pointer;
+  overflow: hidden;
 }
+
 .landing-content {
   display: flex;
   align-items: center;
-  gap: 0;
   justify-content: center;
-  transform: scale(0.96);
-  transform-origin: left center;
+  position: relative;
   opacity: 0;
+  transform: scale(0.95);
+  transition: transform var(--ui-duration) cubic-bezier(0.22, 1, 0.36, 1),
+              opacity var(--ui-duration) cubic-bezier(0.22, 1, 0.36, 1);
 }
+
 .landing.enter .landing-content {
-  transform: scale(1);
   opacity: 1;
-  transition: transform var(--ui-duration) cubic-bezier(0.22, 1, 0.36, 1), opacity var(--ui-duration) cubic-bezier(0.22, 1, 0.36, 1);
+  transform: scale(1);
 }
-/* spacing handled via title-block margin for smoother animation */
+
 .landing .seal {
   width: 180px;
   height: 180px;
   object-fit: contain;
   user-select: none;
+  z-index: 2;
+  transform: translateX(0);
+  transition: transform var(--ui-duration) cubic-bezier(0.22, 1, 0.36, 1);
 }
+
+.landing:hover .seal {
+  transform: translateX(-195px);
+}
+
 .landing .title-block {
+  position: absolute;
+  left: 50%;
   display: flex;
   flex-direction: column;
-  transition: transform var(--ui-duration) cubic-bezier(0.22, 1, 0.36, 1), opacity var(--ui-duration) cubic-bezier(0.22, 1, 0.36, 1), margin-left var(--ui-duration) cubic-bezier(0.22, 1, 0.36, 1);
-  opacity: 0;
-  transform: scale(0.96);
-  margin-left: 0;
+  justify-content: center;
+  align-items: flex-start;
   width: 0;
+  opacity: 0;
   overflow: hidden;
+  white-space: nowrap;
+  pointer-events: none;
+  transform: translateX(-90px);
+  transition:
+    width var(--ui-duration) cubic-bezier(0.22, 1, 0.36, 1),
+    transform var(--ui-duration) cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 0.4s ease-out;
 }
+
+.landing:hover .title-block {
+  width: 550px;
+  opacity: 1;
+  transform: translateX(-45px);
+}
+
 .landing .brand {
   font-size: 100px;
   font-weight: 800;
   letter-spacing: 2px;
   color: var(--brand-blue);
   line-height: 0.85;
+  margin-bottom: 8px;
+  margin-left: -10px;
+  display: block;
 }
-.landing:hover .title-block {
-  transform: scale(1);
-  transform-origin: left center;
-  opacity: 1;
-  margin-left: 24px;
-  width: max-content;
-}
-.landing:hover .landing-content {
-  justify-content: flex-start;
-}
+
 .landing .sub {
-  margin-top: 8px;
-  font-size: 16px;
+  margin-top: 0px;
+  font-size: 16px;  
   letter-spacing: 1.2px;
   text-transform: uppercase;
-  color: #1e3a8a;
-  opacity: 1;
+  color: #002087;
+  line-height: 1.2;  
+  text-align: left;
+  display: block;
+  width: 100%;
 }
+
 .landing .sub.top {
   margin-top: 2px;
 }
+
 .landing .sub.bottom {
   margin-top: 0;
 }
+
 .hint {
   position: fixed;
-  bottom: 24px;
+  bottom: 40px;
   left: 0;
   right: 0;
   text-align: center;
-  color: #334155;
-  font-size: 13px;
+  color: #94a3b8;
+  font-size: 12px;
+  letter-spacing: 2px;
+  font-weight: 600;
+  opacity: 0;
+  transition: opacity 1s ease 0.5s;
+}
+
+.landing.enter .hint {
+  opacity: 1;
 }

@@ -1,13 +1,17 @@
 import React, { useEffect, useState } from 'react';
-import './landing.css';
+import './Landing.css';
+import dictLogo from '../assets/DICTLogo.png'; 
 
 export default function Landing({ onEnter }) {
   const [enter, setEnter] = useState(false);
+
   useEffect(() => {
-    const t = setTimeout(() => setEnter(true), 30);
+    const t = setTimeout(() => setEnter(true), 100);
     return () => clearTimeout(t);
   }, []);
+
   const onKeyDown = (e) => (e.key === 'Enter' ? onEnter?.() : null);
+
   return (
     <div
       className={`landing ${enter ? 'enter' : ''}`}
@@ -19,7 +23,7 @@ export default function Landing({ onEnter }) {
       <div className="landing-content">
         <img
           className="seal"
-          src="https://commons.wikimedia.org/wiki/Special:FilePath/Department_of_Information_and_Communications_Technology_(DICT)_-_Seal_only.svg"
+          src={dictLogo}
           alt="DICT Seal"
           draggable="false"
         />
@@ -29,7 +33,7 @@ export default function Landing({ onEnter }) {
           <div className="sub bottom">COMMUNICATIONS TECHNOLOGY</div>
         </div>
       </div>
-      <div className="hint">Click anywhere to continue</div>
+      <div className="hint">CLICK ANYWHERE TO CONTINUE</div>
     </div>
   );
 }

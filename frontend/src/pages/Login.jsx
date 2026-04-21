@@ -1,36 +1,36 @@
 import React, { useEffect, useState } from 'react';
-import './login.css';
+import './Login_Password.css';
 import { API_BASE } from '../lib/api';
-import bgPassRecov from '../assets/bgpassrecov.png';
+import DICTPeeps from '../assets/DICTPeeps.jpg';
+import dictLogo from '../assets/DICTLogo.png'; 
 
 export default function Login({ onLogin, onForgot }) {
   const [enter, setEnter] = useState(false);
-  const [cardHovered, setCardHovered] = useState(false);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+
   useEffect(() => {
     const t = setTimeout(() => setEnter(true), 50);
     return () => clearTimeout(t);
   }, []);
 
-  const bgTransition = 'opacity var(--ui-duration) var(--ui-ease)';
-
   return (
-    <div className={`login ${enter ? 'enter' : ''}${cardHovered ? ' card-hovered' : ''}`}>
+    <div className={`login ${enter ? 'enter' : ''}`}>
       <div
         className="login-bg"
         style={{
-          backgroundImage: `url(${bgPassRecov})`,
-          opacity: cardHovered ? 1 : 0,
-          transition: bgTransition,
+          backgroundImage: `url(${DICTPeeps})`,
+          opacity: 1,
+          transition: 'opacity 0.5s ease',
         }}
         aria-hidden="true"
       />
       <div
         className="login-overlay"
         style={{
-          opacity: cardHovered ? 1 : 0,
-          transition: bgTransition,
+          opacity: 1,
+          transition: 'opacity 0.5s ease',
         }}
         aria-hidden="true"
       />
@@ -38,7 +38,7 @@ export default function Login({ onLogin, onForgot }) {
         <div className="hero">
           <img
             className="seal"
-            src="https://commons.wikimedia.org/wiki/Special:FilePath/Department_of_Information_and_Communications_Technology_(DICT)_-_Seal_only.svg"
+            src={dictLogo}
             alt="DICT Seal"
             draggable="false"
           />
@@ -48,51 +48,60 @@ export default function Login({ onLogin, onForgot }) {
             <div className="sub bottom">COMMUNICATIONS TECHNOLOGY</div>
           </div>
         </div>
-        <div
-          className="card"
-          onMouseEnter={() => setCardHovered(true)}
-          onMouseLeave={() => setCardHovered(false)}
-        >
+        <div className="card">
           <div className="title">Login</div>
           <form
             className="form"
             onSubmit={async (e) => {
               e.preventDefault();
+              setError('');
+             
+              if (!username.trim() || !password.trim()) return;
+
               try {
                 const res = await fetch(`${API_BASE}/api/auth/login`, {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({ username, password }),
                 });
+               
                 const acc = await res.json();
+               
                 if (!res.ok) {
+                  setError('Invalid username or password. Please try again.');
                   return;
                 }
+               
                 localStorage.setItem('hrmisUser', JSON.stringify(acc));
                 onLogin?.();
-              } catch {
+              } catch (err) {
+                setError('Unable to connect to the server.');
               }
             }}
           >
             <label>
-              <span>Username or Email</span>
               <input
                 type="text"
-                placeholder="Enter username or email"
+                placeholder="Username or Email"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
+                required
               />
             </label>
             <label>
-              <span>Password</span>
               <input
                 type="password"
-                placeholder="Enter password"
+                placeholder="Password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
+                required
               />
             </label>
-            <button type="submit" className="submit" aria-label="Login">→</button>
+
+            {error && <div className="error-message">{error}</div>}
+            <button type="submit" className="submit" aria-label="Login">
+              Login
+            </button>
             <div className="forgot">
               <button
                 type="button"
