@@ -2,11 +2,13 @@ const express = require('express');
 
 module.exports = (db) => {
   const router = express.Router();
-  async function ensureApplicationsTable() {
+  async function ensureTimeOffRequestsTable() {
     await db.query(`
-      CREATE TABLE IF NOT EXISTS applications (
+      CREATE TABLE IF NOT EXISTS time_off_requests (
         id BIGINT AUTO_INCREMENT PRIMARY KEY,
         employee_id INT NOT NULL,
+        uid VARCHAR(50),
+        name VARCHAR(120),
         type_of_leave VARCHAR(60) NOT NULL,
         leave_status VARCHAR(60),
         offset_hours INT DEFAULT 0,
@@ -21,23 +23,22 @@ module.exports = (db) => {
     const q = (req.query.q || '').toString().toLowerCase();
     const sort = (req.query.sort || '').toString();
     try {
-      await ensureApplicationsTable();
+      await ensureTimeOffRequestsTable();
       const [rows] = await db.query(`
         SELECT
           a.id,
-          e.uid,
-          e.name,
+          a.uid,
+          a.name,
           a.type_of_leave AS typeOfLeave,
           a.leave_status AS leaveStatus,
           a.offset_hours AS offsetHours,
           a.offset_status AS offsetStatus
-        FROM applications a
-        JOIN employees e ON a.employee_id = e.id
+        FROM time_off_requests a
       `);
       let list = rows.map((r) => ({
         id: r.id,
-        uid: r.uid,
-        name: r.name,
+        uid: r.uid || '',
+        name: r.name || '',
         typeOfLeave: r.typeOfLeave || '',
         leaveStatus: r.leaveStatus || '',
         offsetHours: r.offsetHours || 0,
@@ -60,8 +61,9 @@ module.exports = (db) => {
         list.sort((a, b) => (a.typeOfLeave || '').localeCompare(b.typeOfLeave || ''));
       }
       res.json(list);
-    } catch (_e) {
-      res.status(500).json({ error: 'db_error' });
+    } catch (err) {
+      console.error('GET /api/applications error:', err);
+      res.status(500).json({ error: 'db_error', details: err.message });
     }
   });
 
@@ -74,15 +76,18 @@ module.exports = (db) => {
       offsetHours = 0,
       offsetStatus,
     } = req.body || {};
+    
     if (!uid || !name || !typeOfLeave) {
       return res.status(400).json({ error: 'uid, name, and typeOfLeave are required' });
     }
+    
     const hours = Number(offsetHours || 0);
-    if (hours && hours < 2) {
+    if (offsetHours && hours < 2 && hours !== 0) {
       return res.status(400).json({ error: 'offsetHours must be at least 2' });
     }
+    
     try {
-      await ensureApplicationsTable();
+      await ensureTimeOffRequestsTable();
       let employeeId;
       const [ers] = await db.query('SELECT id FROM employees WHERE uid = ?', [uid]);
       if (ers.length) {
@@ -96,9 +101,9 @@ module.exports = (db) => {
         employeeId = empResult.insertId;
       }
       const [result] = await db.query(
-        `INSERT INTO applications (employee_id,type_of_leave,leave_status,offset_hours,offset_status)
-         VALUES (?,?,?,?,?)`,
-        [employeeId, typeOfLeave, leaveStatus || '', hours, offsetStatus || '']
+        `INSERT INTO time_off_requests (employee_id,uid,name,type_of_leave,leave_status,offset_hours,offset_status)
+         VALUES (?,?,?,?,?,?,?)`,
+        [employeeId, uid, name, typeOfLeave, leaveStatus || 'Pending', hours, offsetStatus || 'Pending']
       );
       const id = result.insertId;
       const appRec = {
@@ -106,14 +111,15 @@ module.exports = (db) => {
         uid,
         name,
         typeOfLeave,
-        leaveStatus: leaveStatus || '',
+        leaveStatus: leaveStatus || 'Pending',
         offsetHours: hours,
-        offsetStatus: offsetStatus || '',
+        offsetStatus: offsetStatus || 'Pending',
         offset: hours ? `${hours}h` : '',
       };
       res.status(201).json(appRec);
-    } catch (_e) {
-      res.status(500).json({ error: 'db_error' });
+    } catch (err) {
+      console.error('POST /api/applications error:', err);
+      res.status(500).json({ error: 'db_error', details: err.message });
     }
   });
 
@@ -132,12 +138,11 @@ module.exports = (db) => {
       return res.status(400).json({ error: 'offsetHours must be at least 2' });
     }
     try {
-      await ensureApplicationsTable();
+      await ensureTimeOffRequestsTable();
       const [curRows] = await db.query(
-        `SELECT a.id,a.employee_id,e.uid,e.name,a.type_of_leave,a.leave_status,a.offset_hours,a.offset_status
-         FROM applications a
-         JOIN employees e ON a.employee_id = e.id
-         WHERE a.id = ?`,
+        `SELECT id,employee_id,uid,name,type_of_leave,leave_status,offset_hours,offset_status
+         FROM time_off_requests
+         WHERE id = ?`,
         [id]
       );
       if (!curRows.length) return res.status(404).json({ error: 'Not found' });
@@ -158,10 +163,10 @@ module.exports = (db) => {
         employeeId = ers[0].id;
       }
       await db.query(
-        `UPDATE applications
-         SET employee_id = ?, type_of_leave = ?, leave_status = ?, offset_hours = ?, offset_status = ?
+        `UPDATE time_off_requests
+         SET employee_id = ?, uid = ?, name = ?, type_of_leave = ?, leave_status = ?, offset_hours = ?, offset_status = ?
          WHERE id = ?`,
-        [employeeId, nextType, nextLeaveStatus || '', nextHours || 0, nextOffsetStatus || '', id]
+        [employeeId, nextUid, nextName, nextType, nextLeaveStatus || '', nextHours || 0, nextOffsetStatus || '', id]
       );
       const updated = {
         id: Number(id),
@@ -174,8 +179,21 @@ module.exports = (db) => {
         offset: nextHours ? `${nextHours}h` : '',
       };
       res.json(updated);
-    } catch (_e) {
-      res.status(500).json({ error: 'db_error' });
+    } catch (err) {
+      console.error('PUT /api/applications/:id error:', err);
+      res.status(500).json({ error: 'db_error', details: err.message });
+    }
+  });
+
+  router.delete('/:id', async (req, res) => {
+    const { id } = req.params;
+    try {
+      await ensureTimeOffRequestsTable();
+      await db.query('DELETE FROM time_off_requests WHERE id = ?', [id]);
+      res.json({ ok: true });
+    } catch (err) {
+      console.error('DELETE /api/applications/:id error:', err);
+      res.status(500).json({ error: 'db_error', details: err.message });
     }
   });
 

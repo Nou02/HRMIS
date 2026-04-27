@@ -20,20 +20,24 @@ CREATE INDEX idx_emp_name ON employees(name);
 CREATE INDEX idx_emp_dept ON employees(department_project);
 CREATE INDEX idx_emp_category ON employees(employment_category);
 
-CREATE TABLE IF NOT EXISTS applications (
+CREATE TABLE IF NOT EXISTS time_off_requests (
   id BIGINT AUTO_INCREMENT PRIMARY KEY,
   employee_id INT NOT NULL,
+  uid VARCHAR(50),
+  name VARCHAR(120),
   type_of_leave VARCHAR(60) NOT NULL,
   leave_status VARCHAR(60),
   offset_hours INT DEFAULT 0,
   offset_status VARCHAR(60),
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  CONSTRAINT fk_app_employee FOREIGN KEY (employee_id) REFERENCES employees(id) ON DELETE CASCADE
+  CONSTRAINT fk_tor_employee FOREIGN KEY (employee_id) REFERENCES employees(id) ON DELETE CASCADE
 );
-CREATE INDEX idx_app_employee ON applications(employee_id);
-CREATE INDEX idx_app_type ON applications(type_of_leave);
-CREATE INDEX idx_app_status ON applications(leave_status);
+CREATE INDEX idx_tor_employee ON time_off_requests(employee_id);
+CREATE INDEX idx_tor_uid ON time_off_requests(uid);
+CREATE INDEX idx_tor_name ON time_off_requests(name);
+CREATE INDEX idx_tor_type ON time_off_requests(type_of_leave);
+CREATE INDEX idx_tor_status ON time_off_requests(leave_status);
 
 CREATE TABLE IF NOT EXISTS gatepasses (
   id BIGINT AUTO_INCREMENT PRIMARY KEY,

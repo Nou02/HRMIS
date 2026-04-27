@@ -3,20 +3,16 @@ import './Requests.css';
 import { API_BASE } from '../../lib/api';
 import { Search, X, Filter, Trash2, Camera, Check } from 'lucide-react';
 
-export default function Application() {
+export default function Application({ localPhotos, setLocalPhotos }) {
   const [query, setQuery] = useState('');
   const [nameSort, setNameSort] = useState('none');
   const [leaveFilter, setLeaveFilter] = useState('All');
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [applications, setApplications] = useState([]);
+  const [employees, setEmployees] = useState([]);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [fullImageView, setFullImageView] = useState(null);
-
-  const [localPhotos, setLocalPhotos] = useState(() => {
-    const saved = localStorage.getItem('hrmis_employee_photos');
-    return saved ? JSON.parse(saved) : {};
-  });
 
   const [form, setForm] = useState({
     uid: '',
@@ -33,10 +29,6 @@ export default function Application() {
   const searchInputRef = useRef(null);
 
   useEffect(() => {
-    localStorage.setItem('hrmis_employee_photos', JSON.stringify(localPhotos));
-  }, [localPhotos]);
-
-  useEffect(() => {
     function handleClickOutside(event) {
       if (filterRef.current && !filterRef.current.contains(event.target)) {
         setFiltersOpen(false);
@@ -45,6 +37,15 @@ export default function Application() {
     if (filtersOpen) document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [filtersOpen]);
+
+  const loadEmployees = () => {
+    fetch(`${API_BASE}/api/employees`)
+      .then(r => r.json())
+      .then(data => {
+        setEmployees(data);
+      })
+      .catch(err => console.error("Error loading employees:", err));
+  };
 
   const loadApplications = () => {
     const params = new URLSearchParams();
@@ -76,6 +77,10 @@ export default function Application() {
   useEffect(() => {
     loadApplications();
   }, [query, nameSort, leaveFilter]);
+
+  useEffect(() => {
+    loadEmployees();
+  }, []);
 
   const approveRequest = (id, field) => {
     const target = applications.find(a => a.id === id);
@@ -152,25 +157,52 @@ export default function Application() {
       .then((r) => { if (r.ok) loadApplications(); });
   };
 
+  const handleEmployeeSelect = (e) => {
+    const selectedUid = e.target.value;
+    const emp = employees.find(emp => emp.uid === selectedUid);
+    if (emp) {
+      setForm({ 
+        ...form, 
+        uid: emp.uid, 
+        name: emp.name,
+        tempPreview: emp.avatarUrl ? `${API_BASE}${emp.avatarUrl}` : (localPhotos[emp.uid] || null)
+      });
+    } else {
+      setForm({ ...form, uid: '', name: '', tempPreview: null });
+    }
+  };
+
   const submitForm = (e) => {
     e.preventDefault();
     const url = editingId
       ? `${API_BASE}/api/applications/${encodeURIComponent(editingId)}`
       : `${API_BASE}/api/applications`;
    
+    // Create a copy of form data and remove large image data before sending to backend
+    // because the backend handles time off requests separately from employee photos.
+    const { profilePicFile, tempPreview, ...submitData } = form;
+
     fetch(url, {
       method: editingId ? 'PUT' : 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(form),
+      body: JSON.stringify(submitData),
     })
-      .then(() => {
+      .then(async (res) => {
+        if (!res.ok) {
+          const errorData = await res.json().catch(() => ({}));
+          const errorMsg = errorData.details || errorData.error || "Failed to save application";
+          throw new Error(errorMsg);
+        }
         if (form.tempPreview) {
           setLocalPhotos(prev => ({ ...prev, [form.uid.trim()]: form.tempPreview }));
         }
         setModalOpen(false);
         loadApplications();
       })
-      .catch(() => {});
+      .catch((err) => {
+        console.error("Submit error:", err);
+        alert(err.message);
+      });
   };
 
   return (
@@ -267,13 +299,18 @@ export default function Application() {
                   <div className="namecell">
                     <div
                       className="employee-avatar clickable-avatar avatar-border"
-                      onClick={() => localPhotos[a.uid] && setFullImageView(localPhotos[a.uid])}
+                      onClick={() => {
+                        const emp = employees.find(e => e.uid === a.uid);
+                        const imgUrl = emp?.avatarUrl ? `${API_BASE}${emp.avatarUrl}` : localPhotos[a.uid];
+                        if (imgUrl) setFullImageView(imgUrl);
+                      }}
                     >
-                      {localPhotos[a.uid] ? (
-                        <img src={localPhotos[a.uid]} alt="" />
-                      ) : (
-                        <span className="employee-avatar-initials">{(a.name || '?').charAt(0).toUpperCase()}</span>
-                      )}
+                      {(() => {
+                        const emp = employees.find(e => e.uid === a.uid);
+                        if (emp?.avatarUrl) return <img src={`${API_BASE}${emp.avatarUrl}`} alt="" />;
+                        if (localPhotos[a.uid]) return <img src={localPhotos[a.uid]} alt="" />;
+                        return <span className="employee-avatar-initials">{(a.name || '?').charAt(0).toUpperCase()}</span>;
+                      })()}
                     </div>
                     <span className="employee-name-text">{a.name}</span>
                   </div>
@@ -327,16 +364,38 @@ export default function Application() {
               <div className="form-row">
                 <div className="form-col" style={{ flex: '0 0 120px', alignItems: 'center' }}>
                   <label className="field-label">Photo</label>
-                  <div className="profile-upload-circle avatar-border" onClick={() => document.getElementById('pic-input').click()}>
+                  <div className="profile-upload-circle avatar-border">
                     {form.tempPreview ? <img src={form.tempPreview} alt="Preview" /> : <Camera size={24} color="#64748b" />}
-                    <input id="pic-input" type="file" hidden accept="image/*" onChange={handleFileChange} />
                   </div>
                 </div>
                 <div className="form-col" style={{ flex: 1 }}>
-                  <label className="field-label">UID</label>
-                  <input className="input" placeholder="Enter UID" value={form.uid} onChange={(e) => setForm({ ...form, uid: e.target.value })} required />
-                  <label className="field-label" style={{ marginTop: '10px' }}>Name</label>
-                  <input className="input" placeholder="Enter Name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
+                  <label className="field-label">Select Employee</label>
+                  <select 
+                    className="select" 
+                    value={form.uid} 
+                    onChange={handleEmployeeSelect} 
+                    required
+                    disabled={!!editingId}
+                  >
+                    <option value="">-- Select Employee --</option>
+                    {employees.length > 0 ? (
+                      employees.map(emp => (
+                        <option key={emp.uid} value={emp.uid}>
+                          {emp.uid} - {emp.name}
+                        </option>
+                      ))
+                    ) : (
+                      <option disabled>Loading employees...</option>
+                    )}
+                  </select>
+                  {form.uid && (
+                    <div style={{ marginTop: '10px' }}>
+                      <div className="field-label">Selected UID</div>
+                      <div className="input" style={{ background: '#f8fafc', color: '#64748b' }}>{form.uid}</div>
+                      <div className="field-label" style={{ marginTop: '10px' }}>Selected Name</div>
+                      <div className="input" style={{ background: '#f8fafc', color: '#64748b' }}>{form.name}</div>
+                    </div>
+                  )}
                 </div>
               </div>
              

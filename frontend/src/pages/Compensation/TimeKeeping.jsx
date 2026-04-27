@@ -59,7 +59,7 @@ const calculateAttendanceRaw = (clockIn, clockOut, status) => {
   return { totalMin: netMin, lateMin, otMin };
 };
 
-export default function TimeKeeping() {
+export default function TimeKeeping({ localPhotos, setLocalPhotos }) {
   const [query, setQuery] = useState('');
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [nameSort, setNameSort] = useState('none');
@@ -70,10 +70,7 @@ export default function TimeKeeping() {
   const [fullImageView, setFullImageView] = useState(null);
   const [currentTime, setCurrentTime] = useState(new Date());
 
-  const [localPhotos, setLocalPhotos] = useState(() => {
-    const saved = localStorage.getItem('hrmis_employee_photos');
-    return saved ? JSON.parse(saved) : {};
-  });
+  const [employees, setEmployees] = useState([]);
 
   const [form, setForm] = useState({
     uid: '',
@@ -93,10 +90,6 @@ export default function TimeKeeping() {
   }, []);
 
   useEffect(() => {
-    localStorage.setItem('hrmis_employee_photos', JSON.stringify(localPhotos));
-  }, [localPhotos]);
-
-  useEffect(() => {
     function handleClickOutside(event) {
       if (filterRef.current && !filterRef.current.contains(event.target)) setFiltersOpen(false);
     }
@@ -107,9 +100,28 @@ export default function TimeKeeping() {
   const loadRecords = useCallback(() => {
     fetch(`${API_BASE}/api/timekeeping`)
       .then(r => r.json())
-      .then(setRecords)
+      .then(data => {
+        const list = Array.isArray(data) ? data : [];
+        if (list.length === 0 && !query) {
+          fetch(`${API_BASE}/api/employees`)
+            .then(r => r.json())
+            .then(emps => {
+              const rows = (emps || []).map(e => ({
+                uid: e.uid,
+                name: e.name,
+                avatarUrl: e.avatarUrl,
+                clockIn: '',
+                clockOut: '',
+                status: 'Present'
+              }));
+              setRecords(rows);
+            });
+        } else {
+          setRecords(list);
+        }
+      })
       .catch(() => setRecords([]));
-  }, []);
+  }, [query]);
 
   useEffect(() => {
     loadRecords();
@@ -371,8 +383,17 @@ export default function TimeKeeping() {
                 <div className="trow" key={row.uid}>
                   <div className="text-center uid-text" title={row.uid}>{row.uid}</div>
                   <div className="namecell">
-                    <div className="employee-avatar clickable-avatar avatar-border" onClick={() => localPhotos[row.uid] && setFullImageView(localPhotos[row.uid])}>
-                      {localPhotos[row.uid] ? <img src={localPhotos[row.uid]} alt="" /> : <span>{row.name?.charAt(0).toUpperCase()}</span>}
+                    <div className="employee-avatar clickable-avatar avatar-border" onClick={() => {
+                        const imgUrl = row.avatarUrl ? `${API_BASE}${row.avatarUrl}` : localPhotos[row.uid];
+                        if (imgUrl) setFullImageView(imgUrl);
+                      }}>
+                      {row.avatarUrl ? (
+                        <img src={`${API_BASE}${row.avatarUrl}`} alt="" />
+                      ) : localPhotos[row.uid] ? (
+                        <img src={localPhotos[row.uid]} alt="" />
+                      ) : (
+                        <span>{row.name?.charAt(0).toUpperCase()}</span>
+                      )}
                     </div>
                     <span className="employee-name-text" title={row.name}>{row.name}</span>
                   </div>
@@ -386,8 +407,16 @@ export default function TimeKeeping() {
                   </div>
                   <div className="text-center action-cell">
                     <button className="btn small edit-btn-table" onClick={() => {
+                      const cleanTime = (t) => (!t || t === '-') ? '' : t;
                       setEditingUid(row.uid);
-                      setForm({ uid: row.uid, name: row.name, clockIn: row.clockIn || '', clockOut: row.clockOut || '', status: row.status || 'Present', tempPreview: localPhotos[row.uid] || null });
+                      setForm({ 
+                        uid: row.uid, 
+                        name: row.name, 
+                        clockIn: cleanTime(row.clockIn), 
+                        clockOut: cleanTime(row.clockOut), 
+                        status: row.status || 'Present', 
+                        tempPreview: localPhotos[row.uid] || null 
+                      });
                       setModalOpen(true);
                     }}>Edit</button>
                     <button className="btn small delete-btn-table" onClick={() => deleteRecord(row.uid)}>
@@ -427,13 +456,35 @@ export default function TimeKeeping() {
               <div className="form-row">
                 <div className="form-col">
                   <label className="field-label">Clock In</label>
-                  {/* UNLOCKED: Now editable for Present, HalfDay, and Travel */}
-                  <input className="input" type="time" value={form.clockIn} onChange={(e) => setForm({ ...form, clockIn: e.target.value })} disabled={form.status === 'Absent' || form.status === 'On Leave'} />
+                  <input 
+                    className="input" 
+                    type="time" 
+                    value={form.clockIn} 
+                    onChange={(e) => {
+                      const newTime = e.target.value;
+                      setForm(prev => ({
+                        ...prev,
+                        clockIn: newTime,
+                        status: (prev.status === 'Absent' || prev.status === 'On Leave') && newTime ? 'Present' : prev.status
+                      }));
+                    }} 
+                  />
                 </div>
                 <div className="form-col">
                   <label className="field-label">Clock Out</label>
-                  {/* UNLOCKED: Now editable for Present, HalfDay, and Travel */}
-                  <input className="input" type="time" value={form.clockOut} onChange={(e) => setForm({ ...form, clockOut: e.target.value })} disabled={form.status === 'Absent' || form.status === 'On Leave'} />
+                  <input 
+                    className="input" 
+                    type="time" 
+                    value={form.clockOut} 
+                    onChange={(e) => {
+                      const newTime = e.target.value;
+                      setForm(prev => ({
+                        ...prev,
+                        clockOut: newTime,
+                        status: (prev.status === 'Absent' || prev.status === 'On Leave') && newTime ? 'Present' : prev.status
+                      }));
+                    }} 
+                  />
                 </div>
               </div>
               <div className="form-row">

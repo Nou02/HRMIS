@@ -15,7 +15,7 @@ function Metric({ label, value, icon }) {
   );
 }
 
-export default function GatePass() {
+export default function GatePass({ localPhotos, setLocalPhotos }) {
   const [query, setQuery] = React.useState('');
   const [nameSort, setNameSort] = React.useState('none');
   const [filtersOpen, setFiltersOpen] = React.useState(false);
@@ -23,11 +23,6 @@ export default function GatePass() {
   const [modalOpen, setModalOpen] = React.useState(false);
   const [editingId, setEditingId] = React.useState(null);
   const [fullImageView, setFullImageView] = React.useState(null);
-
-  const [localPhotos, setLocalPhotos] = React.useState(() => {
-    const saved = localStorage.getItem('hrmis_employee_photos');
-    return saved ? JSON.parse(saved) : {};
-  });
 
   const [form, setForm] = React.useState({
     uid: '',
@@ -44,10 +39,6 @@ export default function GatePass() {
 
   const filterRef = React.useRef(null);
   const searchInputRef = React.useRef(null);
-
-  React.useEffect(() => {
-    localStorage.setItem('hrmis_employee_photos', JSON.stringify(localPhotos));
-  }, [localPhotos]);
 
   React.useEffect(() => {
     function handleClickOutside(event) {

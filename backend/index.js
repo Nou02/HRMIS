@@ -17,8 +17,8 @@ const multer = require('multer');
 
 const app = express();
 app.use(cors());
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 const uploadDir = path.join(__dirname, 'uploads');
 if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir);
 const storage = multer.diskStorage({
@@ -39,7 +39,7 @@ const db = require('./db');
 const healthRouter = require('./routes/health/db')(db);
 const dashboardRouter = require('./routes/dashboard/stats')(db);
 const employeesRouter = require('./routes/employees/employees')(upload, db);
-const applicationsRouter = require('./routes/applications/applications')(db);
+const timeOffRequestsRouter = require('./routes/applications/applications')(db);
 const gatepassesRouter = require('./routes/gatepasses/gatepasses')(state);
 const payrollRouter = require('./routes/payroll/payroll')(state, db);
 const payslipsRouter = require('./routes/payslips/payslips')(state, db);
@@ -51,7 +51,7 @@ app.use('/api/stats', dashboardRouter);
 app.use('/api/health', healthRouter);
 app.use('/api/landing', landingRouter);
 app.use('/api/employees', employeesRouter);
-app.use('/api/applications', applicationsRouter);
+app.use('/api/applications', timeOffRequestsRouter);
 app.use('/api/gatepasses', gatepassesRouter);
 app.use('/api/payroll', payrollRouter);
 app.use('/api/payslips', payslipsRouter);

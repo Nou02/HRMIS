@@ -15,7 +15,7 @@ function Metric({ label, value, icon }) {
   );
 }
 
-export default function Payslips() {
+export default function Payslips({ localPhotos }) {
   const [query, setQuery] = useState('');
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [nameSort, setNameSort] = useState('none');
@@ -23,11 +23,6 @@ export default function Payslips() {
   const [summary, setSummary] = useState(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [fullImageView, setFullImageView] = useState(null);
-
-  const [localPhotos] = useState(() => {
-    const saved = localStorage.getItem('hrmis_employee_photos');
-    return saved ? JSON.parse(saved) : {};
-  });
 
   const [form, setForm] = useState({
     uid: '',
@@ -236,13 +231,18 @@ export default function Payslips() {
                   <div className="left">
                     <div
                       className="employee-avatar clickable-avatar avatar-border"
-                      onClick={() => localPhotos[p.uid] && setFullImageView(localPhotos[p.uid])}
+                      onClick={() => {
+                        const imgUrl = p.avatarUrl ? `${API_BASE}${p.avatarUrl}` : localPhotos[p.uid];
+                        if (imgUrl) setFullImageView(imgUrl);
+                      }}
                     >
-                       {localPhotos[p.uid] ? (
-                         <img src={localPhotos[p.uid]} alt="" />
-                       ) : (
-                         <span className="employee-avatar-initials">{(p.name || '?').charAt(0).toUpperCase()}</span>
-                       )}
+                      {p.avatarUrl ? (
+                        <img src={`${API_BASE}${p.avatarUrl}`} alt="" />
+                      ) : localPhotos[p.uid] ? (
+                        <img src={localPhotos[p.uid]} alt="" />
+                      ) : (
+                        <span className="employee-avatar-initials">{(p.name || '?').charAt(0).toUpperCase()}</span>
+                      )}
                     </div>
                     <div className="info-block">
                       <div className="employee-name-text">{p.name}</div>

@@ -58,7 +58,7 @@ const calculateAttendanceRaw = (clockIn, clockOut, status) => {
   return { totalMin: netMin, lateMin, otMin };
 };
 
-export default function ReportsTimeKeeping() {
+export default function ReportsTimeKeeping({ localPhotos }) {
   const [query, setQuery] = useState('');
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
@@ -67,11 +67,6 @@ export default function ReportsTimeKeeping() {
   const [records, setRecords] = useState([]);
   const [fullImageView, setFullImageView] = useState(null);
   const [currentTime, setCurrentTime] = useState(new Date());
-
-  const [localPhotos] = useState(() => {
-    const saved = localStorage.getItem('hrmis_employee_photos');
-    return saved ? JSON.parse(saved) : {};
-  });
 
   const filterRef = useRef(null);
   const exportRef = useRef(null);
@@ -91,8 +86,30 @@ export default function ReportsTimeKeeping() {
   }, []);
 
   const loadRecords = useCallback(() => {
-    fetch(`${API_BASE}/api/timekeeping`).then(r => r.json()).then(setRecords).catch(() => setRecords([]));
-  }, []);
+    fetch(`${API_BASE}/api/timekeeping`)
+      .then(r => r.json())
+      .then(data => {
+        const list = Array.isArray(data) ? data : [];
+        if (list.length === 0 && !query) {
+          fetch(`${API_BASE}/api/employees`)
+            .then(r => r.json())
+            .then(emps => {
+              const rows = (emps || []).map(e => ({
+                uid: e.uid,
+                name: e.name,
+                avatarUrl: e.avatarUrl,
+                clockIn: '',
+                clockOut: '',
+                status: 'Present'
+              }));
+              setRecords(rows);
+            });
+        } else {
+          setRecords(list);
+        }
+      })
+      .catch(() => setRecords([]));
+  }, [query]);
 
   useEffect(() => { loadRecords(); }, [loadRecords]);
 
@@ -431,8 +448,17 @@ export default function ReportsTimeKeeping() {
                 <div className="trow" key={row.uid}>
                   <div className="text-center uid-text">{row.uid}</div>
                   <div className="namecell">
-                    <div className="employee-avatar clickable-avatar avatar-border" onClick={() => localPhotos[row.uid] && setFullImageView(localPhotos[row.uid])}>
-                      {localPhotos[row.uid] ? <img src={localPhotos[row.uid]} alt="" /> : <span>{row.name?.charAt(0).toUpperCase()}</span>}
+                    <div className="employee-avatar clickable-avatar avatar-border" onClick={() => {
+                        const imgUrl = row.avatarUrl ? `${API_BASE}${row.avatarUrl}` : localPhotos[row.uid];
+                        if (imgUrl) setFullImageView(imgUrl);
+                      }}>
+                      {row.avatarUrl ? (
+                        <img src={`${API_BASE}${row.avatarUrl}`} alt="" />
+                      ) : localPhotos[row.uid] ? (
+                        <img src={localPhotos[row.uid]} alt="" />
+                      ) : (
+                        <span>{row.name?.charAt(0).toUpperCase()}</span>
+                      )}
                     </div>
                     <span className="employee-name-text">{row.name}</span>
                   </div>

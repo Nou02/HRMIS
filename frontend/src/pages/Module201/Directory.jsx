@@ -3,7 +3,7 @@ import './Directory.css';
 import { API_BASE } from '../../lib/api';
 import { Trash2, Search, X, Filter, Camera } from 'lucide-react';
 
-export default function EmployeesList() {
+export default function EmployeesList({ localPhotos, setLocalPhotos }) {
   const [query, setQuery] = useState('');
   const [employees, setEmployees] = useState([]);
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -16,11 +16,6 @@ export default function EmployeesList() {
   const [editingUid, setEditingUid] = useState(null);
   const [errorMsg, setErrorMsg] = useState('');
   const [fullImageView, setFullImageView] = useState(null);
-
-  const [localPhotos, setLocalPhotos] = useState(() => {
-    const saved = localStorage.getItem('hrmis_employee_photos');
-    return saved ? JSON.parse(saved) : {};
-  });
 
   const [form, setForm] = useState({
     uid: '',
@@ -51,10 +46,6 @@ export default function EmployeesList() {
   const loadStats = () => {
     fetch(`${API_BASE}/api/stats`).then((r) => r.json()).then(setStats).catch(() => {});
   };
-
-  useEffect(() => {
-    localStorage.setItem('hrmis_employee_photos', JSON.stringify(localPhotos));
-  }, [localPhotos]);
 
   useEffect(() => {
     function handleClickOutside(event) {
@@ -130,7 +121,7 @@ export default function EmployeesList() {
       pdsAvailable: !!emp.pdsAvailable,
       idViewAvailable: !!emp.idViewAvailable,
       profilePicFile: null,
-      tempPreview: localPhotos[emp.uid] || null,
+      tempPreview: emp.avatarUrl ? `${API_BASE}${emp.avatarUrl}` : (localPhotos[emp.uid] || null),
       pdsFile: null,
       idFile: null
     });
@@ -140,6 +131,10 @@ export default function EmployeesList() {
   const handleFileChange = (e) => {
     const file = e.target.files[0];
     if (file) {
+      if (file.size > 2 * 1024 * 1024) {
+        alert("File is too large. Please select an image under 2MB.");
+        return;
+      }
       const reader = new FileReader();
       reader.onloadend = () => {
         setForm({ ...form, profilePicFile: file, tempPreview: reader.result });
@@ -154,21 +149,20 @@ export default function EmployeesList() {
     const fd = new FormData();
     fd.append('uid', form.uid.trim());
     fd.append('name', form.name.trim());
-    fd.append('departmentProject', form.departmentProject.trim());
-    fd.append('employmentCategory', form.employmentCategory.trim());
-    fd.append('certifications', form.certifications);
-    if (form.pdsFile) fd.append('pdsFile', form.pdsFile);
-    if (form.idFile) fd.append('idFile', form.idFile);
+    fd.append('departmentProject', (form.departmentProject || '').trim());
+    fd.append('employmentCategory', (form.employmentCategory || '').trim());
+    fd.append('certifications', form.certifications || '');
+    
+    // Only append files if they are actually selected as File objects
+    if (form.pdsFile instanceof File) fd.append('pdsFile', form.pdsFile);
+    if (form.idFile instanceof File) fd.append('idFile', form.idFile);
+    if (form.profilePicFile instanceof File) fd.append('avatarFile', form.profilePicFile);
 
     const url = editingUid ? `${API_BASE}/api/employees/${encodeURIComponent(editingUid)}` : `${API_BASE}/api/employees`;
 
     try {
       const res = await fetch(url, { method: editingUid ? 'PUT' : 'POST', body: fd });
       if (!res.ok) throw new Error(await res.text());
-
-      if (form.tempPreview) {
-        setLocalPhotos(prev => ({ ...prev, [form.uid.trim()]: form.tempPreview }));
-      }
 
       setModalOpen(false);
       setEditingUid(null);
@@ -195,7 +189,10 @@ export default function EmployeesList() {
           <div className="title">Employee Directory</div>
           <div className="page-description">Manage records and local profile pictures</div>
         </div>
-        <button className="btn primary" onClick={openAdd}>+ Add Employee</button>
+        <div className="actions" style={{ display: 'flex', gap: '8px' }}>
+          <button className="btn light" onClick={() => { if(window.confirm("Clear all local photos to free up storage?")) { setLocalPhotos({}); localStorage.removeItem('hrmis_employee_photos'); } }}>Clear Photos</button>
+          <button className="btn primary" onClick={openAdd}>+ Add Employee</button>
+        </div>
       </div>
 
       <div className="metrics">
@@ -284,8 +281,14 @@ export default function EmployeesList() {
                 <div className="trow" key={e.uid}>
                   <div className="text-center uid-text">{e.uid}</div>
                   <div className="namecell">
-                    <div className="employee-avatar clickable-avatar avatar-border" onClick={() => localPhotos[e.uid] && setFullImageView(localPhotos[e.uid])}>
-                      {localPhotos[e.uid] ? <img src={localPhotos[e.uid]} alt="" /> : <span>{e.name?.charAt(0).toUpperCase()}</span>}
+                    <div className="employee-avatar clickable-avatar avatar-border" onClick={() => (e.avatarUrl ? setFullImageView(`${API_BASE}${e.avatarUrl}`) : (localPhotos[e.uid] && setFullImageView(localPhotos[e.uid])))}>
+                      {e.avatarUrl ? (
+                        <img src={`${API_BASE}${e.avatarUrl}`} alt="" />
+                      ) : localPhotos[e.uid] ? (
+                        <img src={localPhotos[e.uid]} alt="" />
+                      ) : (
+                        <span>{e.name?.charAt(0).toUpperCase()}</span>
+                      )}
                     </div>
                     <span className="employee-name-text">{e.name}</span>
                   </div>

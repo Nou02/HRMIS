@@ -15,7 +15,7 @@ function Metric({ label, value, icon }) {
   );
 }
 
-export default function GeneralPayroll() {
+export default function GeneralPayroll({ localPhotos }) {
   const [period, setPeriod] = useState('');
   const [department, setDepartment] = useState('All Departments');
   const [processingDate, setProcessingDate] = useState('');
@@ -27,11 +27,6 @@ export default function GeneralPayroll() {
   const [summary, setSummary] = useState(null);
   const [editOpen, setEditOpen] = useState(false);
   const [fullImageView, setFullImageView] = useState(null);
-
-  const [localPhotos] = useState(() => {
-    const saved = localStorage.getItem('hrmis_employee_photos');
-    return saved ? JSON.parse(saved) : {};
-  });
 
   const [editForm, setEditForm] = useState({
     employeeId: '',
@@ -47,6 +42,9 @@ export default function GeneralPayroll() {
   const searchInputRef = useRef(null);
 
   const formatPeso = (value) => {
+    if (typeof value === 'string') {
+      value = value.replace(/[^\d.-]/g, '');
+    }
     const num = parseFloat(value) || 0;
     if (num === 0) return '';
     return `₱${num % 1 === 0
@@ -78,65 +76,32 @@ export default function GeneralPayroll() {
       .catch(() => {});
   }, []);
 
-  const loadRecords = () => {
-    const params = new URLSearchParams();
-    if (query) params.set('q', query);
-
-    fetch(`${API_BASE}/api/payroll/records${params.toString() ? `?${params.toString()}` : ''}`)
+  const loadRecords = (q = query, s = nameSort, p = period, d = department, st = statusFilter) => {
+    const params = `q=${encodeURIComponent(q)}&sort=${s}&period=${encodeURIComponent(p)}&department=${encodeURIComponent(d)}&status=${encodeURIComponent(st)}`;
+    
+    fetch(`${API_BASE}/api/payroll/records?${params}`)
       .then((r) => r.json())
-      .then((data) => {
-        let list = Array.isArray(data) ? data : [];
-        if (list.length === 0 && !query) {
-          fetch(`${API_BASE}/api/employees`)
-            .then((r) => r.json())
-            .then((emps) => {
-              const rows = (emps || []).map((e) => ({
-                employeeId: e.uid,
-                employeeName: e.name,
-                baseSalary: '0',
-                overtime: '0',
-                deduction: '0',
-                netPay: '0',
-                status: 'Draft',
-              }));
-              applyCustomSort(rows);
-            })
-            .catch(() => setRecords([]));
-        } else {
-          if (statusFilter !== 'All') {
-            list = list.filter(r => (r.status || 'Draft').toLowerCase() === statusFilter.toLowerCase());
-          }
-          applyCustomSort(list);
-        }
-      })
+      .then(setRecords);
+
+    fetch(`${API_BASE}/api/payroll/summary?${params}`)
+      .then((r) => r.json())
+      .then(setSummary)
       .catch(() => {});
   };
 
-  const applyCustomSort = (list) => {
-    const statusPriority = { 'generated': 1, 'updated': 2, 'draft': 3 };
-    const sorted = [...list].sort((a, b) => {
-      const netA = parseFloat(a.netPay) || 0;
-      const netB = parseFloat(b.netPay) || 0;
-      if (netA > 0 && netB === 0) return -1;
-      if (netA === 0 && netB > 0) return 1;
-      if (netA > 0 && netB > 0) {
-        const priorityA = statusPriority[(a.status || 'draft').toLowerCase()] || 99;
-        const priorityB = statusPriority[(b.status || 'draft').toLowerCase()] || 99;
-        if (priorityA !== priorityB) return priorityA - priorityB;
-      }
-      if (nameSort === 'asc') return (a.employeeName || '').localeCompare(b.employeeName || '');
-      if (nameSort === 'desc') return (b.employeeName || '').localeCompare(a.employeeName || '');
-      return 0;
-    });
-    setRecords(sorted);
-  };
-
   useEffect(() => {
-    loadRecords();
-  }, [query, nameSort, statusFilter]);
+    loadRecords(query, nameSort, period, department, statusFilter);
+  }, [period, department, nameSort, statusFilter]);
+
+  const handleSearch = (e) => {
+    const val = e.target.value;
+    setQuery(val);
+    loadRecords(val, nameSort, period, department, statusFilter);
+  };
 
   const handleClearSearch = () => {
     setQuery('');
+    loadRecords('', nameSort, period, department, statusFilter);
     if (searchInputRef.current) searchInputRef.current.focus();
   };
 
@@ -148,7 +113,7 @@ export default function GeneralPayroll() {
         const base = parseFloat(updated.baseSalary) || 0;
         const ot = parseFloat(updated.overtime) || 0;
         const ded = parseFloat(updated.deduction) || 0;
-        updated.netPay = (base + ot - ded).toFixed(2);
+        updated.netPay = (base - ded).toFixed(2);
       }
       return updated;
     });
@@ -170,11 +135,15 @@ export default function GeneralPayroll() {
         </div>
         <div className="actions">
           <button className="btn primary" onClick={() => {
-            fetch(`${API_BASE}/api/payroll/generate`, { method: 'POST' })
+            fetch(`${API_BASE}/api/payroll/generate`, { 
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ period })
+            })
               .then((r) => r.json())
               .then(() => {
                 fetch(`${API_BASE}/api/payroll/summary`).then((r) => r.json()).then(setSummary);
-                loadRecords();
+                loadRecords(query, nameSort, period, department, statusFilter);
               });
           }}>Process Payroll</button>
           <div className="avatar" />
@@ -222,7 +191,7 @@ export default function GeneralPayroll() {
                 ref={searchInputRef}
                 placeholder="Search UID, Name, ..."
                 value={query}
-                onChange={(e) => setQuery(e.target.value)}
+                onChange={handleSearch}
               />
               {query && (
                 <button className="search-clear-btn" onClick={handleClearSearch}>
@@ -288,9 +257,14 @@ export default function GeneralPayroll() {
                   <div className="namecell">
                     <div
                       className="employee-avatar clickable-avatar avatar-border"
-                      onClick={() => localPhotos[row.employeeId] && setFullImageView(localPhotos[row.employeeId])}
+                      onClick={() => {
+                        const imgUrl = row.avatarUrl ? `${API_BASE}${row.avatarUrl}` : localPhotos[row.employeeId];
+                        if (imgUrl) setFullImageView(imgUrl);
+                      }}
                     >
-                      {localPhotos[row.employeeId] ? (
+                      {row.avatarUrl ? (
+                        <img src={`${API_BASE}${row.avatarUrl}`} alt="" />
+                      ) : localPhotos[row.employeeId] ? (
                         <img src={localPhotos[row.employeeId]} alt="" />
                       ) : (
                         <span className="employee-avatar-initials">
@@ -346,7 +320,7 @@ export default function GeneralPayroll() {
               fetch(`${API_BASE}/api/payroll/records/${encodeURIComponent(editForm.employeeId)}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(editForm),
+                body: JSON.stringify({ ...editForm, period }),
               }).then(() => {
                 setEditOpen(false);
                 loadRecords();
