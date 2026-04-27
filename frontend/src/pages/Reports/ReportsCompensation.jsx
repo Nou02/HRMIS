@@ -13,7 +13,7 @@ import {
   ChevronDown 
 } from 'lucide-react';
 
-export default function ReportsCompensation() {
+export default function ReportsCompensation({ localPhotos }) {
   const [view, setView] = React.useState(null);
   const [payroll, setPayroll] = React.useState([]);
   const [payslips, setPayslips] = React.useState([]);
@@ -21,11 +21,6 @@ export default function ReportsCompensation() {
   
   const [exportOpen, setExportOpen] = useState(false);
   const exportRef = useRef(null);
-
-  const [localPhotos] = React.useState(() => {
-    const saved = localStorage.getItem('hrmis_employee_photos');
-    return saved ? JSON.parse(saved) : {};
-  });
 
   useEffect(() => {
     function handleClickOutside(event) {

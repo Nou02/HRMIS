@@ -19,25 +19,13 @@ function App() {
   const [showLanding, setShowLanding] = useState(true);
   const [showLogin, setShowLogin] = useState(false);
   const [showRecovery, setShowRecovery] = useState(false);
-
-  // Global state for employee photos to ensure consistency across pages
   const [localPhotos, setLocalPhotos] = useState(() => {
-    try {
-      const saved = localStorage.getItem('hrmis_employee_photos');
-      return saved ? JSON.parse(saved) : {};
-    } catch (e) {
-      console.error("Failed to parse photos from storage", e);
-      return {};
-    }
+    const saved = localStorage.getItem('hrmis_employee_photos');
+    return saved ? JSON.parse(saved) : {};
   });
 
-  // Sync photos to localStorage whenever they change
   useEffect(() => {
-    try {
-      localStorage.setItem('hrmis_employee_photos', JSON.stringify(localPhotos));
-    } catch (e) {
-      console.error("Failed to save photos to storage", e);
-    }
+    localStorage.setItem('hrmis_employee_photos', JSON.stringify(localPhotos));
   }, [localPhotos]);
 
   const handleLogout = () => {
@@ -66,7 +54,7 @@ function App() {
       case 'payslips':  return <Payslips localPhotos={localPhotos} />;
       case 'timekeeping': return <TimeKeeping localPhotos={localPhotos} setLocalPhotos={setLocalPhotos} />;
       case 'reports-time': return <ReportsTimeKeeping localPhotos={localPhotos} />;
-      case 'reports-comp': return <ReportsCompensation />;
+      case 'reports-comp': return <ReportsCompensation localPhotos={localPhotos} />;
       default: return <Dashboard onNavigate={setActive} />;
     }
   };
