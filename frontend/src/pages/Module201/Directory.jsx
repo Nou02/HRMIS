@@ -199,7 +199,6 @@ export default function EmployeesList({ localPhotos, setLocalPhotos }) {
         <Metric label="Total Employees" value={stats?.totalEmployees ?? '-'} icon="👥" />
         <Metric label="Job Order" value={stats?.jobOrderCount ?? '-'} icon="📋" />
         <Metric label="Regular" value={stats?.regularEmployeeCount ?? '-'} icon="👤" />
-        <Metric label="Technical Ops" value={stats?.technicalOpsDivisions ?? '-'} icon="🛠️" />
         <Metric label="Admin" value={stats?.adminCount ?? '-'} icon="🏢" />
       </div>
 
@@ -240,7 +239,6 @@ export default function EmployeesList({ localPhotos, setLocalPhotos }) {
                     <label className="field-label">Department Project</label>
                     <select className="select" value={deptFilter} onChange={(e) => setDeptFilter(e.target.value)}>
                       <option value="all">All Departments</option>
-                      <option value="Technical Operations Divisions">Technical Operations Divisions</option>
                       <option value="Admin of Finance">Admin of Finance</option>
                       <option value="Office of the Regional Director">Office of the Regional Director</option>
                     </select>
@@ -251,7 +249,6 @@ export default function EmployeesList({ localPhotos, setLocalPhotos }) {
                       <option value="all">All Categories</option>
                       <option value="Job Order">Job Order</option>
                       <option value="Regular Employees">Regular Employees</option>
-                      <option value="Technical Operations Divisions">Technical Operations Divisions</option>
                       <option value="Admin">Admin</option>
                     </select>
                   </div>
@@ -337,7 +334,6 @@ export default function EmployeesList({ localPhotos, setLocalPhotos }) {
                   <label className="field-label">Department Project</label>
                   <select className="select" value={form.departmentProject} onChange={(e) => setForm({ ...form, departmentProject: e.target.value })}>
                     <option value="">Select Department</option>
-                    <option value="Technical Operations Divisions">Technical Operations Divisions</option>
                     <option value="Admin of Finance">Admin of Finance</option>
                     <option value="Office of the Regional Director">Office of the Regional Director</option>
                   </select>
@@ -348,7 +344,6 @@ export default function EmployeesList({ localPhotos, setLocalPhotos }) {
                     <option value="">Select Category</option>
                     <option value="Job Order">Job Order</option>
                     <option value="Regular Employees">Regular Employees</option>
-                    <option value="Technical Operations Divisions">Technical Operations Divisions</option>
                     <option value="Admin">Admin</option>
                   </select>
                 </div>

@@ -15,10 +15,27 @@ function Metric({ label, value, icon }) {
   );
 }
 
+function getPeriodFromDate(dateStr) {
+  if (!dateStr) return '';
+  const d = new Date(dateStr);
+  const year = d.getFullYear();
+  const month = d.getMonth() + 1;
+  const day = d.getDate();
+  const mm = String(month).padStart(2, '0');
+  if (day >= 1 && day <= 15) {
+    return `P1-${year}-${mm}`;
+  } else {
+    return `P2-${year}-${mm}`;
+  }
+}
+
 export default function GeneralPayroll({ localPhotos }) {
-  const [period, setPeriod] = useState('');
+  const [period, setPeriod] = useState(() => {
+    const now = new Date();
+    return getPeriodFromDate(now.toISOString().split('T')[0]);
+  });
   const [department, setDepartment] = useState('All Departments');
-  const [processingDate, setProcessingDate] = useState('');
+  const [processingDate, setProcessingDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [query, setQuery] = useState('');
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [nameSort, setNameSort] = useState('none');
@@ -33,6 +50,7 @@ export default function GeneralPayroll({ localPhotos }) {
     employeeName: '',
     baseSalary: '',
     overtime: '',
+    overtimeHours: 0,
     deduction: '',
     netPay: '',
     status: '',
@@ -59,6 +77,34 @@ export default function GeneralPayroll({ localPhotos }) {
     return val;
   };
 
+  const handleProcessingDateChange = (e) => {
+    const newDate = e.target.value;
+    setProcessingDate(newDate);
+    const newPeriod = getPeriodFromDate(newDate);
+    setPeriod(newPeriod);
+  };
+
+  const periodOptions = [];
+  const now = new Date();
+  for (let m = 0; m < 12; m++) {
+    const d = new Date(now.getFullYear(), now.getMonth() - m, 1);
+    const year = d.getFullYear();
+    const month = d.getMonth() + 1;
+    const mm = String(month).padStart(2, '0');
+    const monthName = d.toLocaleString('en-US', { month: 'long' });
+    
+    periodOptions.push({
+      value: `P1-${year}-${mm}`,
+      label: `${monthName} 1-15, ${year}`
+    });
+    
+    const lastDay = new Date(year, month, 0).getDate();
+    periodOptions.push({
+      value: `P2-${year}-${mm}`,
+      label: `${monthName} 16-${lastDay}, ${year}`
+    });
+  }
+
   useEffect(() => {
     function handleClickOutside(event) {
       if (filterRef.current && !filterRef.current.contains(event.target)) {
@@ -69,12 +115,16 @@ export default function GeneralPayroll({ localPhotos }) {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [filtersOpen]);
 
-  useEffect(() => {
-    fetch(`${API_BASE}/api/payroll/summary`)
+  const loadSummary = (p = period) => {
+    fetch(`${API_BASE}/api/payroll/summary?period=${encodeURIComponent(p)}`)
       .then((r) => r.json())
       .then(setSummary)
       .catch(() => {});
-  }, []);
+  };
+
+  useEffect(() => {
+    loadSummary();
+  }, [period]);
 
   const loadRecords = (q = query, s = nameSort, p = period, d = department, st = statusFilter) => {
     const params = `q=${encodeURIComponent(q)}&sort=${s}&period=${encodeURIComponent(p)}&department=${encodeURIComponent(d)}&status=${encodeURIComponent(st)}`;
@@ -111,9 +161,12 @@ export default function GeneralPayroll({ localPhotos }) {
       const updated = { ...prev, [name]: value };
       if (['baseSalary', 'overtime', 'deduction'].includes(name)) {
         const base = parseFloat(updated.baseSalary) || 0;
-        const ot = parseFloat(updated.overtime) || 0;
+        const rate = parseFloat(updated.overtime) || 0;
+        const hours = parseFloat(updated.overtimeHours) || 0;
         const ded = parseFloat(updated.deduction) || 0;
-        updated.netPay = (base - ded).toFixed(2);
+        
+        const calculatedOTAmount = rate * hours;
+        updated.netPay = ((base / 2) + calculatedOTAmount - ded).toFixed(2);
       }
       return updated;
     });
@@ -142,7 +195,7 @@ export default function GeneralPayroll({ localPhotos }) {
             })
               .then((r) => r.json())
               .then(() => {
-                fetch(`${API_BASE}/api/payroll/summary`).then((r) => r.json()).then(setSummary);
+                loadSummary(period);
                 loadRecords(query, nameSort, period, department, statusFilter);
               });
           }}>Process Payroll</button>
@@ -163,20 +216,23 @@ export default function GeneralPayroll({ localPhotos }) {
         <div style={{ padding: 24, display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 24 }}>
           <div className="form-col">
             <label className="field-label">Pay Period</label>
-            <input className="input" placeholder="e.g. Oct 1-15, 2023" value={period} onChange={(e) => setPeriod(e.target.value)} />
+            <select className="select" value={period} onChange={(e) => setPeriod(e.target.value)}>
+              {periodOptions.map(opt => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              ))}
+            </select>
           </div>
           <div className="form-col">
             <label className="field-label">Department</label>
             <select className="select" value={department} onChange={(e) => setDepartment(e.target.value)}>
               <option>All Departments</option>
-              <option>Technical Operations Divisions</option>
               <option>Admin of Finance</option>
               <option>Office of the Regional Director</option>
             </select>
           </div>
           <div className="form-col">
             <label className="field-label">Processing Date</label>
-            <input className="input" type="date" value={processingDate} onChange={(e) => setProcessingDate(e.target.value)} />
+            <input className="input" type="date" value={processingDate} onChange={handleProcessingDateChange} />
           </div>
         </div>
       </div>
@@ -292,6 +348,7 @@ export default function GeneralPayroll({ localPhotos }) {
                         employeeName: row.employeeName || '',
                         baseSalary: String(row.baseSalary || '').replace(/[^\d.-]/g, '') || '0',
                         overtime: String(row.overtime || '').replace(/[^\d.-]/g, '') || '0',
+                        overtimeHours: row.overtimeHours || 0,
                         deduction: String(row.deduction || '').replace(/[^\d.-]/g, '') || '0',
                         netPay: String(row.netPay || '').replace(/[^\d.-]/g, '') || '0',
                         status: row.status || 'Draft',
@@ -356,12 +413,12 @@ export default function GeneralPayroll({ localPhotos }) {
                   />
                 </div>
                 <div className="form-col">
-                  <label className="field-label">Overtime</label>
+                  <label className="field-label">Overtime (Rate/hr)</label>
                   <input
                     name="overtime"
                     type="number"
                     className="input"
-                    placeholder="e.g. 1000"
+                    placeholder="e.g. 200"
                     value={editForm.overtime}
                     onChange={handleEditChange}
                   />
@@ -369,6 +426,15 @@ export default function GeneralPayroll({ localPhotos }) {
               </div>
 
               <div className="form-row">
+                <div className="form-col">
+                  <label className="field-label">Overtime Hours (Actual)</label>
+                  <input
+                    className="input"
+                    style={{backgroundColor: '#f5f5f5'}}
+                    value={editForm.overtimeHours}
+                    readOnly
+                  />
+                </div>
                 <div className="form-col">
                   <label className="field-label">Deduction</label>
                   <input
@@ -380,6 +446,8 @@ export default function GeneralPayroll({ localPhotos }) {
                     onChange={handleEditChange}
                   />
                 </div>
+              </div>
+              <div className="form-row">
                 <div className="form-col">
                   <label className="field-label">Net Pay (Calculated)</label>
                   <input

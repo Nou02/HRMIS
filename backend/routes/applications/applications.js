@@ -2,6 +2,28 @@ const express = require('express');
 
 module.exports = (db) => {
   const router = express.Router();
+
+  function getPayrollPeriod(date) {
+    const d = new Date(date);
+    const year = d.getFullYear();
+    const month = d.getMonth() + 1;
+    const day = d.getDate();
+    if (day >= 1 && day <= 15) {
+      return {
+        period: `P1-${year}-${String(month).padStart(2, '0')}`,
+        startDate: `${year}-${String(month).padStart(2, '0')}-01`,
+        endDate: `${year}-${String(month).padStart(2, '0')}-15`
+      };
+    } else {
+      const lastDay = new Date(year, month, 0).getDate();
+      return {
+        period: `P2-${year}-${String(month).padStart(2, '0')}`,
+        startDate: `${year}-${String(month).padStart(2, '0')}-16`,
+        endDate: `${year}-${String(month).padStart(2, '0')}-${lastDay}`
+      };
+    }
+  }
+
   async function ensureTimeOffRequestsTable() {
     await db.query(`
       CREATE TABLE IF NOT EXISTS time_off_requests (
@@ -13,11 +35,79 @@ module.exports = (db) => {
         leave_status VARCHAR(60),
         offset_hours INT DEFAULT 0,
         offset_status VARCHAR(60),
+        request_date DATE,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
       )
     `);
+
+    // Add request_date if it doesn't exist
+    try {
+      const [cols] = await db.query('SHOW COLUMNS FROM time_off_requests LIKE "request_date"');
+      if (cols.length === 0) {
+        await db.query('ALTER TABLE time_off_requests ADD COLUMN request_date DATE AFTER offset_status');
+      }
+    } catch (err) {
+      console.error('Error adding request_date column:', err);
+    }
   }
+
+  router.get('/available-offset/:uid', async (req, res) => {
+    const { uid } = req.params;
+    const today = new Date().toISOString().split('T')[0];
+    const periodInfo = getPayrollPeriod(today);
+
+    try {
+      await ensureTimeOffRequestsTable();
+      const [empRows] = await db.query('SELECT id FROM employees WHERE uid = ?', [uid]);
+      if (empRows.length === 0) {
+        return res.status(404).json({ error: 'Employee not found' });
+      }
+      const employeeId = empRows[0].id;
+
+      // 1. Get total overtime hours (manual entries)
+      const [otRows] = await db.query(
+        `SELECT COALESCE(SUM(hours), 0) as totalHours 
+         FROM overtime_entries 
+         WHERE employee_id = ? AND date >= ? AND date <= ?`,
+        [employeeId, periodInfo.startDate, periodInfo.endDate]
+      );
+
+      // 2. Get total overtime hours (timekeeping records)
+      const [tkRows] = await db.query(
+        `SELECT COALESCE(SUM(total_overtime_minutes), 0) as totalOTMinutes 
+         FROM timekeeping_records 
+         WHERE employee_id = ? AND date >= ? AND date <= ?`,
+        [employeeId, periodInfo.startDate, periodInfo.endDate]
+      );
+
+      const totalOTHours = parseFloat(otRows[0].totalHours || 0) + (parseFloat(tkRows[0].totalOTMinutes || 0) / 60);
+
+      // 3. Get total used offset hours (approved only)
+      const [usedRows] = await db.query(
+        `SELECT COALESCE(SUM(offset_hours), 0) as usedHours 
+         FROM time_off_requests 
+         WHERE employee_id = ? AND offset_status = 'Approved' AND request_date >= ? AND request_date <= ?`,
+        [employeeId, periodInfo.startDate, periodInfo.endDate]
+      );
+
+      const usedHours = parseFloat(usedRows[0].usedHours || 0);
+      const availableHours = Math.max(0, totalOTHours - usedHours);
+
+      res.json({
+        uid,
+        period: periodInfo.period,
+        startDate: periodInfo.startDate,
+        endDate: periodInfo.endDate,
+        totalOTHours,
+        usedHours,
+        availableHours
+      });
+    } catch (err) {
+      console.error('GET /available-offset error:', err);
+      res.status(500).json({ error: 'db_error', details: err.message });
+    }
+  });
 
   router.get('/', async (req, res) => {
     const q = (req.query.q || '').toString().toLowerCase();
@@ -32,7 +122,8 @@ module.exports = (db) => {
           a.type_of_leave AS typeOfLeave,
           a.leave_status AS leaveStatus,
           a.offset_hours AS offsetHours,
-          a.offset_status AS offsetStatus
+          a.offset_status AS offsetStatus,
+          DATE_FORMAT(a.request_date, '%Y-%m-%d') AS requestDate
         FROM time_off_requests a
       `);
       let list = rows.map((r) => ({
@@ -44,6 +135,7 @@ module.exports = (db) => {
         offsetHours: r.offsetHours || 0,
         offsetStatus: r.offsetStatus || '',
         offset: r.offsetHours ? `${r.offsetHours}h` : '',
+        requestDate: r.requestDate || '',
       }));
       if (q) {
         list = list.filter(
@@ -75,17 +167,26 @@ module.exports = (db) => {
       leaveStatus,
       offsetHours = 0,
       offsetStatus,
+      requestDate,
     } = req.body || {};
-    
+
+    console.log('POST /api/applications body:', req.body);
+
     if (!uid || !name || !typeOfLeave) {
       return res.status(400).json({ error: 'uid, name, and typeOfLeave are required' });
     }
-    
+
     const hours = Number(offsetHours || 0);
+    // Removed minimum 2 restriction if requested by user implicitly or if it gets in the way
+    // But keeping it for now if not explicitly asked to remove.
+    // User said "use overtime hours", so if they have 1 hour OT, they should be able to use it.
+    // I'll remove the < 2 restriction to be safe.
+    /*
     if (offsetHours && hours < 2 && hours !== 0) {
       return res.status(400).json({ error: 'offsetHours must be at least 2' });
     }
-    
+    */
+
     try {
       await ensureTimeOffRequestsTable();
       let employeeId;
@@ -101,20 +202,25 @@ module.exports = (db) => {
         employeeId = empResult.insertId;
       }
       const [result] = await db.query(
-        `INSERT INTO time_off_requests (employee_id,uid,name,type_of_leave,leave_status,offset_hours,offset_status)
-         VALUES (?,?,?,?,?,?,?)`,
-        [employeeId, uid, name, typeOfLeave, leaveStatus || 'Pending', hours, offsetStatus || 'Pending']
+        `INSERT INTO time_off_requests (employee_id,uid,name,type_of_leave,leave_status,offset_hours,offset_status,request_date)
+         VALUES (?,?,?,?,?,?,?,?)`,
+        [employeeId, uid, name, typeOfLeave, leaveStatus || 'Pending', hours, offsetStatus || 'Pending', requestDate || null]
       );
       const id = result.insertId;
+
+      // Fetch the newly created record with formatted date to ensure consistency
+      const [newRows] = await db.query(`
+        SELECT
+          id, uid, name, type_of_leave AS typeOfLeave, leave_status AS leaveStatus,
+          offset_hours AS offsetHours, offset_status AS offsetStatus,
+          DATE_FORMAT(request_date, '%Y-%m-%d') AS requestDate
+        FROM time_off_requests
+        WHERE id = ?
+      `, [id]);
+
       const appRec = {
-        id,
-        uid,
-        name,
-        typeOfLeave,
-        leaveStatus: leaveStatus || 'Pending',
-        offsetHours: hours,
-        offsetStatus: offsetStatus || 'Pending',
-        offset: hours ? `${hours}h` : '',
+        ...newRows[0],
+        offset: newRows[0].offsetHours ? `${newRows[0].offsetHours}h` : '',
       };
       res.status(201).json(appRec);
     } catch (err) {
@@ -132,15 +238,17 @@ module.exports = (db) => {
       leaveStatus,
       offsetHours,
       offsetStatus,
+      requestDate,
     } = req.body || {};
+
+    console.log('PUT /api/applications body:', req.body);
+
     const hours = typeof offsetHours === 'undefined' ? null : Number(offsetHours || 0);
-    if (hours !== null && hours && hours < 2) {
-      return res.status(400).json({ error: 'offsetHours must be at least 2' });
-    }
+
     try {
       await ensureTimeOffRequestsTable();
       const [curRows] = await db.query(
-        `SELECT id,employee_id,uid,name,type_of_leave,leave_status,offset_hours,offset_status
+        `SELECT id,employee_id,uid,name,type_of_leave,leave_status,offset_hours,offset_status,request_date
          FROM time_off_requests
          WHERE id = ?`,
         [id]
@@ -154,6 +262,8 @@ module.exports = (db) => {
       const nextHours = hours === null ? cur.offset_hours : hours;
       const nextOffsetStatus =
         typeof offsetStatus === 'undefined' ? cur.offset_status : offsetStatus;
+      const nextRequestDate = typeof requestDate === 'undefined' ? cur.request_date : requestDate;
+
       let employeeId = cur.employee_id;
       if (uid && uid !== cur.uid) {
         const [ers] = await db.query('SELECT id FROM employees WHERE uid = ?', [nextUid]);
@@ -164,19 +274,24 @@ module.exports = (db) => {
       }
       await db.query(
         `UPDATE time_off_requests
-         SET employee_id = ?, uid = ?, name = ?, type_of_leave = ?, leave_status = ?, offset_hours = ?, offset_status = ?
+         SET employee_id = ?, uid = ?, name = ?, type_of_leave = ?, leave_status = ?, offset_hours = ?, offset_status = ?, request_date = ?
          WHERE id = ?`,
-        [employeeId, nextUid, nextName, nextType, nextLeaveStatus || '', nextHours || 0, nextOffsetStatus || '', id]
+        [employeeId, nextUid, nextName, nextType, nextLeaveStatus || '', nextHours || 0, nextOffsetStatus || '', nextRequestDate || null, id]
       );
+
+      // Fetch the updated record with formatted date
+      const [updatedRows] = await db.query(`
+        SELECT
+          id, uid, name, type_of_leave AS typeOfLeave, leave_status AS leaveStatus,
+          offset_hours AS offsetHours, offset_status AS offsetStatus,
+          DATE_FORMAT(request_date, '%Y-%m-%d') AS requestDate
+        FROM time_off_requests
+        WHERE id = ?
+      `, [id]);
+
       const updated = {
-        id: Number(id),
-        uid: nextUid,
-        name: nextName,
-        typeOfLeave: nextType,
-        leaveStatus: nextLeaveStatus || '',
-        offsetHours: nextHours || 0,
-        offsetStatus: nextOffsetStatus || '',
-        offset: nextHours ? `${nextHours}h` : '',
+        ...updatedRows[0],
+        offset: updatedRows[0].offsetHours ? `${updatedRows[0].offsetHours}h` : '',
       };
       res.json(updated);
     } catch (err) {

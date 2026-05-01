@@ -14,6 +14,18 @@ export default function Application({ localPhotos, setLocalPhotos }) {
   const [editingId, setEditingId] = useState(null);
   const [fullImageView, setFullImageView] = useState(null);
 
+  const formatDate = (dateStr) => {
+    if (!dateStr) return '-';
+    try {
+      const [year, month, day] = dateStr.split('-');
+      if (!year || !month || !day) return dateStr;
+      const date = new Date(year, month - 1, day);
+      return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+    } catch (e) {
+      return dateStr;
+    }
+  };
+
   const [form, setForm] = useState({
     uid: '',
     name: '',
@@ -21,9 +33,25 @@ export default function Application({ localPhotos, setLocalPhotos }) {
     leaveStatus: 'Pending',
     offsetHours: '',
     offsetStatus: 'Pending',
+    requestDate: new Date().toISOString().split('T')[0],
     profilePicFile: null,
     tempPreview: null
   });
+
+  const [availableOffset, setAvailableOffset] = useState(null);
+
+  const loadAvailableOffset = (uid) => {
+    if (!uid) {
+      setAvailableOffset(null);
+      return;
+    }
+    fetch(`${API_BASE}/api/applications/available-offset/${uid}`)
+      .then(r => r.json())
+      .then(data => {
+        setAvailableOffset(data);
+      })
+      .catch(err => console.error("Error loading available offset:", err));
+  };
 
   const filterRef = useRef(null);
   const searchInputRef = useRef(null);
@@ -35,6 +63,7 @@ export default function Application({ localPhotos, setLocalPhotos }) {
       }
     }
     if (filtersOpen) document.addEventListener('mousedown', handleClickOutside);
+
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [filtersOpen]);
 
@@ -130,9 +159,11 @@ export default function Application({ localPhotos, setLocalPhotos }) {
       leaveStatus: 'Pending',
       offsetHours: '',
       offsetStatus: 'Pending',
+      requestDate: new Date().toISOString().split('T')[0],
       profilePicFile: null,
       tempPreview: null
     });
+    setAvailableOffset(null);
     setModalOpen(true);
   };
 
@@ -145,9 +176,11 @@ export default function Application({ localPhotos, setLocalPhotos }) {
       leaveStatus: a.leaveStatus || 'Pending',
       offsetHours: a.offsetHours ?? '',
       offsetStatus: a.offsetStatus || 'Pending',
+      requestDate: a.requestDate || new Date().toISOString().split('T')[0],
       profilePicFile: null,
       tempPreview: localPhotos[a.uid] || null
     });
+    loadAvailableOffset(a.uid);
     setModalOpen(true);
   };
 
@@ -167,8 +200,10 @@ export default function Application({ localPhotos, setLocalPhotos }) {
         name: emp.name,
         tempPreview: emp.avatarUrl ? `${API_BASE}${emp.avatarUrl}` : (localPhotos[emp.uid] || null)
       });
+      loadAvailableOffset(emp.uid);
     } else {
       setForm({ ...form, uid: '', name: '', tempPreview: null });
+      setAvailableOffset(null);
     }
   };
 
@@ -181,6 +216,12 @@ export default function Application({ localPhotos, setLocalPhotos }) {
     // Create a copy of form data and remove large image data before sending to backend
     // because the backend handles time off requests separately from employee photos.
     const { profilePicFile, tempPreview, ...submitData } = form;
+
+    if (availableOffset && parseFloat(form.offsetHours || 0) > availableOffset.availableHours) {
+      if (!window.confirm(`Requested offset hours (${form.offsetHours}) exceed available OT balance (${availableOffset.availableHours.toFixed(2)}). Continue anyway?`)) {
+        return;
+      }
+    }
 
     fetch(url, {
       method: editingId ? 'PUT' : 'POST',
@@ -283,6 +324,7 @@ export default function Application({ localPhotos, setLocalPhotos }) {
             <div className="thead">
               <div className="text-center">UID</div>
               <div className="text-center">Name</div>
+              <div className="text-center">Date</div>
               <div className="text-center">Type of Leave</div>
               <div className="text-center">Leave Status</div>
               <div className="text-center">Off-set</div>
@@ -314,6 +356,7 @@ export default function Application({ localPhotos, setLocalPhotos }) {
                     </div>
                     <span className="employee-name-text">{a.name}</span>
                   </div>
+                  <div className="text-center">{formatDate(a.requestDate)}</div>
                   <div className="text-center">{a.typeOfLeave || '-'}</div>
                   
                   <div className="status-cell">
@@ -411,8 +454,29 @@ export default function Application({ localPhotos, setLocalPhotos }) {
                   </select>
                 </div>
                 <div className="form-col">
+                  <label className="field-label">Request Date</label>
+                  <input 
+                    type="date" 
+                    className="input" 
+                    value={form.requestDate} 
+                    onChange={(e) => setForm({ ...form, requestDate: e.target.value })} 
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="form-row">
+                <div className="form-col">
                   <label className="field-label">Leave Status</label>
                   <select className="select" value={form.leaveStatus} onChange={(e) => setForm({ ...form, leaveStatus: e.target.value })}>
+                    <option value="Pending">Pending</option>
+                    <option value="Approved">Approved</option>
+                    <option value="Rejected">Rejected</option>
+                  </select>
+                </div>
+                <div className="form-col">
+                  <label className="field-label">Off-set Status</label>
+                  <select className="select" value={form.offsetStatus} onChange={(e) => setForm({ ...form, offsetStatus: e.target.value })}>
                     <option value="Pending">Pending</option>
                     <option value="Approved">Approved</option>
                     <option value="Rejected">Rejected</option>
@@ -422,16 +486,13 @@ export default function Application({ localPhotos, setLocalPhotos }) {
 
               <div className="form-row">
                 <div className="form-col">
-                  <label className="field-label">Off-set Hours (min 2)</label>
-                  <input className="input" type="number" min="2" value={form.offsetHours} onChange={(e) => setForm({ ...form, offsetHours: e.target.value })} />
-                </div>
-                <div className="form-col">
-                  <label className="field-label">Off-set Status</label>
-                  <select className="select" value={form.offsetStatus} onChange={(e) => setForm({ ...form, offsetStatus: e.target.value })}>
-                    <option value="Pending">Pending</option>
-                    <option value="Approved">Approved</option>
-                    <option value="Rejected">Rejected</option>
-                  </select>
+                  <label className="field-label">Off-set Hours</label>
+                  <input className="input" type="number" step="0.5" value={form.offsetHours} onChange={(e) => setForm({ ...form, offsetHours: e.target.value })} />
+                  {availableOffset && (
+                    <div style={{ fontSize: '12px', marginTop: '4px', color: '#0ea5e9', fontWeight: '500' }}>
+                      Available OT: {availableOffset.availableHours.toFixed(2)} hrs ({availableOffset.period})
+                    </div>
+                  )}
                 </div>
               </div>
 

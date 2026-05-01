@@ -29,6 +29,7 @@ CREATE TABLE IF NOT EXISTS time_off_requests (
   leave_status VARCHAR(60),
   offset_hours INT DEFAULT 0,
   offset_status VARCHAR(60),
+  request_date DATE,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   CONSTRAINT fk_tor_employee FOREIGN KEY (employee_id) REFERENCES employees(id) ON DELETE CASCADE
@@ -42,11 +43,19 @@ CREATE INDEX idx_tor_status ON time_off_requests(leave_status);
 CREATE TABLE IF NOT EXISTS gatepasses (
   id BIGINT AUTO_INCREMENT PRIMARY KEY,
   employee_id INT NOT NULL,
-  destination VARCHAR(255),
-  purpose VARCHAR(255),
+  uid VARCHAR(50),
+  name VARCHAR(120),
+  official_type VARCHAR(100),
+  official_purpose TEXT,
+  personal_type VARCHAR(100),
+  personal_purpose TEXT,
   date DATE,
-  time_out TIME,
-  time_in TIME,
+  est_start_time TIME,
+  est_end_time TIME,
+  act_start_time TIME,
+  act_end_time TIME,
+  venue VARCHAR(255),
+  approved_by VARCHAR(120),
   status VARCHAR(40),
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -117,6 +126,11 @@ CREATE TABLE IF NOT EXISTS accounts (
 );
 CREATE INDEX idx_accounts_username ON accounts(username);
 CREATE INDEX idx_accounts_role ON accounts(role);
+
+CREATE TABLE IF NOT EXISTS overtime_settings (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  hourly_rate DECIMAL(10,2) NOT NULL
+);
 
 -- INSERT INITIAL ADMIN ACCOUNT (Optional, use your preferred username/password)
 -- INSERT INTO accounts (username, password_hash, role, email) VALUES ('admin', 'admin123', 'admin', 'admin@example.com');

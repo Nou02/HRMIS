@@ -250,6 +250,12 @@
   color: #000000; 
 } 
 
+.status.preview { 
+  background: #e0f2fe; 
+  color: #0369a1; 
+  border: 1px dashed #0ea5e9;
+} 
+
 .no-records-row {
   padding: 40px;
   text-align: center;

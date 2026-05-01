@@ -28,15 +28,29 @@ const getCurrentTimeStr = () => {
   return `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
 };
 
-const calculateAttendanceRaw = (clockIn, clockOut, status) => {
+const calculateAttendanceRaw = (clockIn, clockOut, status, dateStr) => {
   if (status === 'Absent' || status === 'On Leave' || !clockIn || !clockOut || clockIn === '-' || clockOut === '-') {
     return { totalMin: 0, lateMin: 0, otMin: 0 };
   }
 
   const [inH, inM] = clockIn.split(':').map(Number);
   const [outH, outM] = clockOut.split(':').map(Number);
-  const inDate = new Date(2026, 0, 1, inH, inM);
-  const outDate = new Date(2026, 0, 1, outH, outM);
+  
+  let year, month, day;
+  if (dateStr) {
+    const parts = dateStr.split('-').map(Number);
+    year = parts[0];
+    month = parts[1] - 1; // JS months are 0-indexed
+    day = parts[2];
+  } else {
+    const now = new Date();
+    year = now.getFullYear();
+    month = now.getMonth();
+    day = now.getDate();
+  }
+
+  const inDate = new Date(year, month, day, inH, inM);
+  const outDate = new Date(year, month, day, outH, outM);
   
   let diffMin = (outDate - inDate) / (1000 * 60);
   if (diffMin < 0) return { totalMin: 0, lateMin: 0, otMin: 0 };
@@ -44,11 +58,15 @@ const calculateAttendanceRaw = (clockIn, clockOut, status) => {
   const netMin = Math.max(0, diffMin - 60);
   const isSevenAmShift = (inH < 7) || (inH === 7 && inM <= 30);
   const scheduledInH = isSevenAmShift ? 7 : 8;
-  const scheduledOutH = isSevenAmShift ? 18 : 17;
+  const scheduledInM = isSevenAmShift ? 0 : 30; // Late after 8:30 AM (or 7:00 AM)
+  const scheduledOutH = 18; // Overtime starts after 6:00 PM
 
   let lateMin = 0;
-  if (inH > scheduledInH || (inH === scheduledInH && inM > 0)) {
-    lateMin = (inH - scheduledInH) * 60 + inM;
+  const totalInMins = inH * 60 + inM;
+  const totalScheduledMins = scheduledInH * 60 + scheduledInM;
+  
+  if (totalInMins > totalScheduledMins) {
+    lateMin = totalInMins - totalScheduledMins;
   }
 
   let otMin = 0;
@@ -69,6 +87,15 @@ export default function TimeKeeping({ localPhotos, setLocalPhotos }) {
   const [editingUid, setEditingUid] = useState(null);
   const [fullImageView, setFullImageView] = useState(null);
   const [currentTime, setCurrentTime] = useState(new Date());
+  const getLocalDateString = () => {
+    const d = new Date();
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  const [selectedDate, setSelectedDate] = useState(getLocalDateString());
 
   const [employees, setEmployees] = useState([]);
 
@@ -83,6 +110,7 @@ export default function TimeKeeping({ localPhotos, setLocalPhotos }) {
 
   const filterRef = useRef(null);
   const searchInputRef = useRef(null);
+  const dateInputRef = useRef(null);
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
@@ -97,39 +125,50 @@ export default function TimeKeeping({ localPhotos, setLocalPhotos }) {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const loadRecords = useCallback(() => {
-    fetch(`${API_BASE}/api/timekeeping`)
+  const loadRecords = useCallback((targetDate) => {
+    const activeDate = targetDate || selectedDate;
+    fetch(`${API_BASE}/api/timekeeping?date=${activeDate}&_t=${Date.now()}`)
       .then(r => r.json())
       .then(data => {
-        const list = Array.isArray(data) ? data : [];
-        if (list.length === 0 && !query) {
-          fetch(`${API_BASE}/api/employees`)
-            .then(r => r.json())
-            .then(emps => {
-              const rows = (emps || []).map(e => ({
-                uid: e.uid,
-                name: e.name,
-                avatarUrl: e.avatarUrl,
-                clockIn: '',
-                clockOut: '',
-                status: 'Present'
-              }));
-              setRecords(rows);
-            });
-        } else {
-          setRecords(list);
+        // Only update if the date we fetched for is still the selected date
+        if (activeDate === selectedDate) {
+          setRecords(Array.isArray(data) ? data : []);
         }
       })
-      .catch(() => setRecords([]));
-  }, [query]);
+      .catch((err) => {
+        console.error("Error loading records:", err);
+        if (activeDate === selectedDate) {
+          setRecords([]);
+        }
+      });
+  }, [selectedDate]);
 
   useEffect(() => {
-    loadRecords();
-  }, [loadRecords]);
+    let isMounted = true;
+    const currentSelectedDate = selectedDate;
+    
+    setRecords([]); // Clear records when date changes to avoid showing stale data
+    
+    fetch(`${API_BASE}/api/timekeeping?date=${currentSelectedDate}&_t=${Date.now()}`)
+      .then(r => r.json())
+      .then(data => {
+        if (isMounted && currentSelectedDate === selectedDate) {
+          setRecords(Array.isArray(data) ? data : []);
+        }
+      })
+      .catch((err) => {
+        console.error("Error fetching records in useEffect:", err);
+        if (isMounted && currentSelectedDate === selectedDate) {
+          setRecords([]);
+        }
+      });
+
+    return () => { isMounted = false; };
+  }, [selectedDate]);
 
   const deleteRecord = (uid) => {
     if (!window.confirm("Are you sure you want to delete this record?")) return;
-    fetch(`${API_BASE}/api/timekeeping/${encodeURIComponent(uid)}`, {
+    fetch(`${API_BASE}/api/timekeeping/${encodeURIComponent(uid)}?date=${selectedDate}`, {
       method: 'DELETE',
     })
       .then((r) => {
@@ -141,10 +180,16 @@ export default function TimeKeeping({ localPhotos, setLocalPhotos }) {
 
   const processedRecords = useMemo(() => {
     let result = records.map(r => {
-      const raw = calculateAttendanceRaw(r.clockIn, r.clockOut, r.status || 'Present');
+      // If the record has no clockIn/clockOut and status is Absent, don't show stale values
+      const hasRecord = r.clockIn && r.clockIn !== '-' || r.clockOut && r.clockOut !== '-' || r.status !== 'Absent';
+      
+      const raw = hasRecord 
+        ? calculateAttendanceRaw(r.clockIn, r.clockOut, r.status || 'Present', selectedDate)
+        : { totalMin: 0, lateMin: 0, otMin: 0 };
+
       return {
         ...r,
-        totalTime: formatDurationClean(raw.totalMin),
+        totalTime: hasRecord ? formatDurationClean(raw.totalMin) : '-',
         late: raw.lateMin > 0 ? formatDurationClean(raw.lateMin) : '-',
         overtime: raw.otMin > 0 ? formatDurationClean(raw.otMin) : '-',
         rawTime: raw.totalMin,
@@ -178,7 +223,7 @@ export default function TimeKeeping({ localPhotos, setLocalPhotos }) {
     });
 
     return result;
-  }, [records, query, statusFilter, nameSort]);
+  }, [records, query, statusFilter, nameSort, selectedDate]);
 
   const stats = useMemo(() => {
     const presentCount = records.filter(r => r.status === 'Present').length;
@@ -229,7 +274,8 @@ export default function TimeKeeping({ localPhotos, setLocalPhotos }) {
       name: form.name.trim(),
       clockIn: form.clockIn,
       clockOut: form.clockOut,
-      status: form.status
+      status: form.status,
+      date: selectedDate
     };
 
     const method = editingUid ? 'PUT' : 'POST';
@@ -258,6 +304,12 @@ export default function TimeKeeping({ localPhotos, setLocalPhotos }) {
       alert("Error saving record: " + err.message);
     });
   }
+
+  const displayDate = useMemo(() => {
+    if (!selectedDate) return new Date();
+    const [y, m, d] = selectedDate.split('-').map(Number);
+    return new Date(y, m - 1, d);
+  }, [selectedDate]);
 
   return (
     <div className="screen">
@@ -305,14 +357,21 @@ export default function TimeKeeping({ localPhotos, setLocalPhotos }) {
           </div>
         </div>
 
-        <div className="calendar-metric">
+        <div className="calendar-metric clickable-metric" onClick={() => dateInputRef.current?.showPicker()}>
+          <input 
+            type="date" 
+            ref={dateInputRef} 
+            style={{ position: 'absolute', opacity: 0, pointerEvents: 'none' }} 
+            value={selectedDate}
+            onChange={(e) => setSelectedDate(e.target.value)}
+          />
           <div className="calendar-left">
-            <div className="cal-month">{currentTime.toLocaleString('default', { month: 'short' }).toUpperCase()}</div>
-            <div className="cal-day">{currentTime.getDate()}</div>
-            <div className="cal-year">{currentTime.getFullYear()}</div>
+            <div className="cal-month">{displayDate.toLocaleString('default', { month: 'short' }).toUpperCase()}</div>
+            <div className="cal-day">{displayDate.getDate()}</div>
+            <div className="cal-year">{displayDate.getFullYear()}</div>
           </div>
           <div className="calendar-right">
-            <div className="cal-weekday">{currentTime.toLocaleString('default', { weekday: 'long' })}</div>
+            <div className="cal-weekday">{displayDate.toLocaleString('default', { weekday: 'long' })}</div>
             <div className="cal-time">
                 <Clock size={14} style={{ marginRight: '6px' }} />
                 {currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
@@ -380,7 +439,7 @@ export default function TimeKeeping({ localPhotos, setLocalPhotos }) {
               <div className="no-records-row">No record(s) found/added</div>
             ) : (
               processedRecords.map((row) => (
-                <div className="trow" key={row.uid}>
+                <div className="trow" key={`${row.uid}-${selectedDate}`}>
                   <div className="text-center uid-text" title={row.uid}>{row.uid}</div>
                   <div className="namecell">
                     <div className="employee-avatar clickable-avatar avatar-border" onClick={() => {

@@ -95,6 +95,21 @@
   color: #fff;
   background: linear-gradient(135deg, #3b82f6 0%, #1e40af 100%);
   box-shadow: 0 4px 15px rgba(30, 64, 175, 0.2);
+  position: relative;
+}
+
+.clickable-metric {
+  cursor: pointer;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.clickable-metric:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(30, 64, 175, 0.3);
+}
+
+.clickable-metric:active {
+  transform: translateY(0);
 }
 
 .calendar-left {

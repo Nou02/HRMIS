@@ -40,10 +40,11 @@ const healthRouter = require('./routes/health/db')(db);
 const dashboardRouter = require('./routes/dashboard/stats')(db);
 const employeesRouter = require('./routes/employees/employees')(upload, db);
 const timeOffRequestsRouter = require('./routes/applications/applications')(db);
-const gatepassesRouter = require('./routes/gatepasses/gatepasses')(state);
+const gatepassesRouter = require('./routes/gatepasses/gatepasses')(db);
 const payrollRouter = require('./routes/payroll/payroll')(state, db);
 const payslipsRouter = require('./routes/payslips/payslips')(state, db);
 const timekeepingRouter = require('./routes/timekeeping/timekeeping')(state, db);
+const overtimeRouter = require('./routes/overtime/overtime')(state, db);
 const landingRouter = require('./routes/landing/landing')();
 const authRouter = require('./routes/auth/auth')(db);
 
@@ -56,9 +57,10 @@ app.use('/api/gatepasses', gatepassesRouter);
 app.use('/api/payroll', payrollRouter);
 app.use('/api/payslips', payslipsRouter);
 app.use('/api/timekeeping', timekeepingRouter);
+app.use('/api/overtime', overtimeRouter);
 app.use('/api/auth', authRouter);
 
-const PORT = process.env.PORT || 5174;
+const PORT = process.env.PORT || 5176;
 app.listen(PORT, () => {
   console.log(`Backend running at http://localhost:${PORT}`);
 });

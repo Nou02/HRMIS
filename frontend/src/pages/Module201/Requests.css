@@ -150,10 +150,10 @@
 
 .applications-table .thead, .applications-table .trow {
   display: grid;
-  grid-template-columns: 0.7fr 1.2fr 1.3fr 1.3fr 0.8fr 1.3fr 1fr;
+  grid-template-columns: 0.8fr 1.5fr 1fr 1.2fr 1fr 0.8fr 1.2fr 0.8fr;
   padding: 12px 24px;
   align-items: center;
-  min-width: 1000px;
+  min-width: 1200px;
 }
 
 .thead {
@@ -169,7 +169,7 @@
 
 .trow {
   border-bottom: 1px solid var(--border);
-  min-height: 110px;
+  min-height: 80px;
 }
 
 .trow:hover {
@@ -180,6 +180,7 @@
   text-align: center;
   display: flex;
   justify-content: center;
+  align-items: center;
 }
 
 .uid-text {
@@ -189,10 +190,10 @@
 
 .namecell {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
-  gap: 8px;
-  text-align: center;
+  gap: 12px;
+  text-align: left;
 }
 
 .employee-avatar {
@@ -255,6 +256,7 @@
 .status-cell {
   display: flex;
   justify-content: center;
+  align-items: center;
 }
 
 .status {
@@ -284,6 +286,7 @@
   display: flex;
   justify-content: center;
   gap: 8px;
+  flex-wrap: nowrap;
 }
 
 .no-records-row {

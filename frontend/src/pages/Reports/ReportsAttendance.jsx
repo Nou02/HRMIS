@@ -43,11 +43,16 @@ const calculateAttendanceRaw = (clockIn, clockOut, status) => {
   // STRICT SHIFT LOGIC
   const isSevenAmShift = (inH < 7) || (inH === 7 && inM <= 30);
   const scheduledInH = isSevenAmShift ? 7 : 8;
-  const scheduledOutH = isSevenAmShift ? 18 : 17;
+  const scheduledInM = isSevenAmShift ? 0 : 30; // Late after 8:30 AM (or 7:00 AM)
+  // Overtime starts after 6:00 PM for everyone
+  const scheduledOutH = 18;
 
   let lateMin = 0;
-  if (inH > scheduledInH || (inH === scheduledInH && inM > 0)) {
-    lateMin = (inH - scheduledInH) * 60 + inM;
+  const totalInMins = inH * 60 + inM;
+  const totalScheduledMins = scheduledInH * 60 + scheduledInM;
+
+  if (totalInMins > totalScheduledMins) {
+    lateMin = totalInMins - totalScheduledMins;
   }
 
   let otMin = 0;
