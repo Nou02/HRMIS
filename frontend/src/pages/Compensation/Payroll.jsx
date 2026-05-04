@@ -131,7 +131,19 @@ export default function GeneralPayroll({ localPhotos }) {
     
     fetch(`${API_BASE}/api/payroll/records?${params}`)
       .then((r) => r.json())
-      .then(setRecords);
+      .then(data => {
+        const enhanced = data.map(r => {
+          if (r.employmentCategory && r.employmentCategory !== 'Job Order') {
+            const raw = parseFloat(String(r.baseSalary).replace(/[^\d.-]/g, '')) || 0;
+            return {
+              ...r,
+              displaySalary: `₱${(raw * 1.2).toLocaleString()}`
+            };
+          }
+          return { ...r, displaySalary: r.baseSalary };
+        });
+        setRecords(enhanced);
+      });
 
     fetch(`${API_BASE}/api/payroll/summary?${params}`)
       .then((r) => r.json())
@@ -166,10 +178,38 @@ export default function GeneralPayroll({ localPhotos }) {
         const ded = parseFloat(updated.deduction) || 0;
         
         const calculatedOTAmount = rate * hours;
-        updated.netPay = ((base / 2) + calculatedOTAmount - ded).toFixed(2);
+
+        let currentBase = base;
+        if (updated.employmentCategory && updated.employmentCategory !== 'Job Order') {
+          currentBase = base * 1.2;
+        }
+
+        updated.netPay = ((currentBase / 2) + calculatedOTAmount - ded).toFixed(2);
       }
       return updated;
     });
+  };
+
+  const handleGetFromPayslip = () => {
+    if (!editForm.employeeId) return;
+    fetch(`${API_BASE}/api/payslips/${editForm.employeeId}?period=${period}`)
+      .then(res => {
+        if (!res.ok) throw new Error('No payslip found for this period');
+        return res.json();
+      })
+      .then(data => {
+        setEditForm(prev => ({
+          ...prev,
+          baseSalary: String(data.gross || '0').replace(/[^\d.-]/g, ''),
+          deduction: String(data.deductions || '0').replace(/[^\d.-]/g, ''),
+        }));
+        // Note: bonus from payslip isn't directly mapped to overtime rate, 
+        // but base salary and deductions are usually what users want to sync.
+      })
+      .catch(err => {
+        console.error('Sync error:', err);
+        alert(err.message);
+      });
   };
 
   return (
@@ -330,7 +370,7 @@ export default function GeneralPayroll({ localPhotos }) {
                     </div>
                     <span className="employee-name-text">{row.employeeName || '-'}</span>
                   </div>
-                  <div className="text-center">{displayCellValue(row.baseSalary)}</div>
+                  <div className="text-center">{displayCellValue(row.displaySalary)}</div>
                   <div className="text-center">{displayCellValue(row.overtime)}</div>
                   <div className="text-center">{displayCellValue(row.deduction)}</div>
                   <div className="text-center" style={{ fontWeight: 600 }}>
@@ -346,6 +386,7 @@ export default function GeneralPayroll({ localPhotos }) {
                       setEditForm({
                         employeeId: row.employeeId || '',
                         employeeName: row.employeeName || '',
+                        employmentCategory: row.employmentCategory || '',
                         baseSalary: String(row.baseSalary || '').replace(/[^\d.-]/g, '') || '0',
                         overtime: String(row.overtime || '').replace(/[^\d.-]/g, '') || '0',
                         overtimeHours: row.overtimeHours || 0,
@@ -370,7 +411,17 @@ export default function GeneralPayroll({ localPhotos }) {
           <div className="modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <div className="card-title">Edit Payroll Info</div>
-              <button className="modal-close-x" onClick={() => setEditOpen(false)}>✕</button>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <button 
+                  type="button" 
+                  className="btn light small" 
+                  onClick={handleGetFromPayslip}
+                  title="Pull values from this employee's payslip for the current period"
+                >
+                  🔄 Get from Payslip
+                </button>
+                <button className="modal-close-x" onClick={() => setEditOpen(false)}>✕</button>
+              </div>
             </div>
             <form onSubmit={(e) => {
               e.preventDefault();

@@ -14,13 +14,48 @@ import {
 } from 'lucide-react';
 
 export default function ReportsCompensation({ localPhotos }) {
+  const [period, setPeriod] = useState(() => {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const periodNum = now.getDate() <= 15 ? 1 : 2;
+    return `P${periodNum}-${year}-${month}`;
+  });
   const [view, setView] = React.useState(null);
   const [payroll, setPayroll] = React.useState([]);
   const [payslips, setPayslips] = React.useState([]);
+  const [summary, setSummary] = React.useState({
+    totalEmployees: 0,
+    basePayroll: '₱0.00',
+    totalOvertime: '₱0.00',
+    period: '-'
+  });
   const [fullImageView, setFullImageView] = React.useState(null);
   
   const [exportOpen, setExportOpen] = useState(false);
+  const [selectedDept, setSelectedDept] = useState(null);
   const exportRef = useRef(null);
+
+  const periodOptions = [];
+  const now = new Date();
+  for (let m = 0; m < 12; m++) {
+    const d = new Date(now.getFullYear(), now.getMonth() - m, 1);
+    const year = d.getFullYear();
+    const month = d.getMonth() + 1;
+    const mm = String(month).padStart(2, '0');
+    const monthName = d.toLocaleString('en-US', { month: 'long' });
+    
+    periodOptions.push({
+      value: `P1-${year}-${mm}`,
+      label: `${monthName} 1-15, ${year}`
+    });
+    
+    const lastDay = new Date(year, month, 0).getDate();
+    periodOptions.push({
+      value: `P2-${year}-${mm}`,
+      label: `${monthName} 16-${lastDay}, ${year}`
+    });
+  }
 
   useEffect(() => {
     function handleClickOutside(event) {
@@ -33,19 +68,37 @@ export default function ReportsCompensation({ localPhotos }) {
   }, []);
 
   useEffect(() => {
+    // Load summary for the selected period, filtering by 'Generated' status only
+    fetch(`${API_BASE}/api/payroll/summary?period=${encodeURIComponent(period)}&status=Generated`)
+      .then(r => r.json())
+      .then(setSummary)
+      .catch(() => {});
+
     if (view === 'payroll') {
-      fetch(`${API_BASE}/api/payroll/records`)
+      // Fetch only 'Generated' payroll records for the report
+      fetch(`${API_BASE}/api/payroll/records?period=${encodeURIComponent(period)}&only_generated=true`)
         .then((r) => r.json())
         .then(setPayroll)
         .catch(() => setPayroll([]));
     }
     if (view === 'payslips') {
-      fetch(`${API_BASE}/api/payslips?only_confirmed=true`)
+      // Payslips report already filters by 'only_confirmed=true'
+      fetch(`${API_BASE}/api/payslips?only_confirmed=true&period=${encodeURIComponent(period)}`)
         .then((r) => r.json())
-        .then(setPayslips)
-        .catch(() => setPayslips([]));
+        .then((data) => {
+          // Trim and compare periods to be robust against spacing issues
+          const targetPeriod = String(period || '').trim();
+          const filtered = (Array.isArray(data) ? data : []).filter(p => 
+            String(p.period || '').trim() === targetPeriod
+          );
+          setPayslips(filtered);
+        })
+        .catch((err) => {
+          console.error('Payslips report error:', err);
+          setPayslips([]);
+        });
     }
-  }, [view]);
+  }, [view, period]);
 
   const formatPeso = (value) => {
     const numStr = String(value).trim();
@@ -59,7 +112,19 @@ export default function ReportsCompensation({ localPhotos }) {
   };
 
   const formatDate = (dateStr) => {
-    if (!dateStr) return '-';
+    if (!dateStr || dateStr === '-' || dateStr === '—') return '-';
+    
+    // Check if it's a period code like P1-2026-05
+    const periodMatch = String(dateStr).match(/^P(\d)-(\d{4})-(\d{2})$/);
+    if (periodMatch) {
+      const [_, num, year, month] = periodMatch;
+      const d = new Date(parseInt(year), parseInt(month) - 1, 1);
+      const monthName = d.toLocaleString('en-US', { month: 'short' });
+      if (num === '1') return `${monthName} 1-15, ${year}`;
+      const lastDay = new Date(parseInt(year), parseInt(month), 0).getDate();
+      return `${monthName} 16-${lastDay}, ${year}`;
+    }
+
     const date = new Date(dateStr);
     if (isNaN(date.getTime())) return dateStr;
     const mm = String(date.getMonth() + 1).padStart(2, '0');
@@ -70,16 +135,39 @@ export default function ReportsCompensation({ localPhotos }) {
 
   const filteredAndSortedPayroll = useMemo(() => {
     const statusPriority = { 'generated': 1, 'updated': 2, 'draft': 3 };
-    return payroll
+    const filtered = payroll
       .filter(row => {
-        const net = parseFloat(row.netPay);
+        // Correctly parse currency string like "₱144,000"
+        const netStr = String(row.netPay || '0').replace(/[^\d.-]/g, '');
+        const net = parseFloat(netStr);
         return !isNaN(net) && net > 0;
       })
       .sort((a, b) => {
-        const priorityA = statusPriority[(a.status || 'draft').toLowerCase()] || 99;
-        const priorityB = statusPriority[(b.status || 'draft').toLowerCase()] || 99;
-        return priorityA - priorityB;
+        const priorityA = statusPriority[(a.status || 'draft').toLowerCase().replace(/\s*\(new\)\s*/i, '')] || 99;
+        const priorityB = statusPriority[(b.status || 'draft').toLowerCase().replace(/\s*\(new\)\s*/i, '')] || 99;
+        if (priorityA !== priorityB) return priorityA - priorityB;
+        return (a.employeeName || '').localeCompare(b.employeeName || '');
       });
+
+    if (selectedDept) {
+      return filtered.filter(r => r.departmentProject === selectedDept);
+    }
+    return filtered;
+  }, [payroll, selectedDept]);
+
+  const payrollByDept = useMemo(() => {
+    const groups = {};
+    payroll.forEach(row => {
+      const netStr = String(row.netPay || '0').replace(/[^\d.-]/g, '');
+      const net = parseFloat(netStr);
+      if (isNaN(net) || net <= 0) return;
+
+      const dept = row.departmentProject || 'Unassigned';
+      if (!groups[dept]) groups[dept] = { employees: [], totalNet: 0 };
+      groups[dept].employees.push(row);
+      groups[dept].totalNet += net;
+    });
+    return groups;
   }, [payroll]);
 
   const getStatusColorStyle = (status) => {
@@ -133,6 +221,13 @@ export default function ReportsCompensation({ localPhotos }) {
   };
 
   const downloadExcel = () => {
+    if (view === 'payroll' && selectedDept) {
+      // Use the new template-based Excel export for department payroll
+      const url = `${API_BASE}/api/payroll/export-xlsx?period=${encodeURIComponent(period)}&department=${encodeURIComponent(selectedDept)}`;
+      window.open(url, '_blank');
+      return;
+    }
+
     const isPayroll = view === 'payroll';
     const data = isPayroll ? filteredAndSortedPayroll : payslips;
     const headers = isPayroll 
@@ -142,7 +237,7 @@ export default function ReportsCompensation({ localPhotos }) {
     const tableRows = data.map(r => {
       const cells = isPayroll 
         ? [r.employeeId, r.employeeName, formatPeso(r.baseSalary), formatPeso(r.overtime), formatPeso(r.deduction), formatPeso(r.netPay)]
-        : [r.uid, r.name, formatPeso(r.gross), formatPeso(r.bonus), formatPeso(r.deductions), formatPeso(r.netPay), formatDate(p.period)];
+        : [r.uid, r.name, formatPeso(r.gross), formatPeso(r.bonus), formatPeso(r.deductions), formatPeso(r.netPay), formatDate(r.period)];
       
       const statusText = isPayroll ? r.status : r.status;
       const statusStyle = getStatusColorStyle(statusText);
@@ -259,44 +354,90 @@ export default function ReportsCompensation({ localPhotos }) {
           <div className="subtitle-text">View and export generated financial reports</div>
         </div>
         <div className="actions">
+          <div className="period-selector-container" style={{ marginRight: '16px' }}>
+            <select 
+              className="select" 
+              value={period} 
+              onChange={(e) => setPeriod(e.target.value)}
+              style={{ padding: '8px 12px', borderRadius: '8px', border: '1px solid var(--border)' }}
+            >
+              {periodOptions.map(opt => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              ))}
+            </select>
+          </div>
+          {summary?.period && summary.period !== '-' && (
+            <div className="period-badge">
+              <span className="label">Period:</span>
+              <span className="value">{formatDate(summary.period)}</span>
+            </div>
+          )}
           <div className="avatar" />
         </div>
       </div>
 
       {!view && (
-        <div className="grid-selection">
-          <div className="module-card" onClick={() => setView('payroll')}>
-            <div className="module-bg" style={{ backgroundImage: `url(${payrollImg})` }} />
-            <div className="module-overlay" />
-            <div className="module-content-wrapper">
-              <div className="module-icon">💳</div>
-              <div className="module-content">
-                <div className="module-title">General Payrolls</div>
-                <div className="module-desc">Review total company payroll records</div>
+        <>
+          <div className="summary-metrics-row">
+            <div className="metric-card">
+              <div className="metric-icon blue">💰</div>
+              <div className="metric-info">
+                <div className="metric-label">Total Net Payroll</div>
+                <div className="metric-value">{summary.basePayroll}</div>
               </div>
-              <div className="module-click-hint">Open Module →</div>
+            </div>
+            <div className="metric-card">
+              <div className="metric-icon purple">👥</div>
+              <div className="metric-info">
+                <div className="metric-label">Employees Paid</div>
+                <div className="metric-value">{summary.totalEmployees}</div>
+              </div>
+            </div>
+            <div className="metric-card">
+              <div className="metric-icon orange">⌛</div>
+              <div className="metric-info">
+                <div className="metric-label">Total Overtime</div>
+                <div className="metric-value">{summary.totalOvertime}</div>
+              </div>
             </div>
           </div>
 
-          <div className="module-card" onClick={() => setView('payslips')}>
-            <div className="module-bg" style={{ backgroundImage: `url(${payslipImg})` }} />
-            <div className="module-overlay" />
-            <div className="module-content-wrapper">
-              <div className="module-icon">📄</div>
-              <div className="module-content">
-                <div className="module-title">Payslips</div>
-                <div className="module-desc">View confirmed individual employee payslips</div>
+          <div className="grid-selection">
+            <div className="module-card" onClick={() => setView('payroll')}>
+              <div className="module-bg" style={{ backgroundImage: `url(${payrollImg})` }} />
+              <div className="module-overlay" />
+              <div className="module-content-wrapper">
+                <div className="module-icon">💳</div>
+                <div className="module-content">
+                  <div className="module-title">General Payrolls</div>
+                  <div className="module-desc">Review total company payroll records for {formatDate(summary.period)}</div>
+                </div>
+                <div className="module-click-hint">Open Report →</div>
               </div>
-              <div className="module-click-hint">Open Module →</div>
+            </div>
+
+            <div className="module-card" onClick={() => setView('payslips')}>
+              <div className="module-bg" style={{ backgroundImage: `url(${payslipImg})` }} />
+              <div className="module-overlay" />
+              <div className="module-content-wrapper">
+                <div className="module-icon">📄</div>
+                <div className="module-content">
+                  <div className="module-title">Payslips</div>
+                  <div className="module-desc">View confirmed individual employee payslips for {formatDate(summary.period)}</div>
+                </div>
+                <div className="module-click-hint">Open Report →</div>
+              </div>
             </div>
           </div>
-        </div>
+        </>
       )}
 
       {view === 'payroll' && (
         <div className="card">
           <div className="card-header overflow-visible">
-            <div className="card-title">Preview · General Payrolls</div>
+            <div className="card-title">
+              {selectedDept ? `General Payrolls · ${selectedDept}` : 'General Payrolls · Select Department'}
+            </div>
             <div className="card-actions" style={{ display: 'flex', gap: '8px' }}>
               <div className="dropdown" ref={exportRef}>
                 <button className="btn primary export-btn" onClick={() => setExportOpen(!exportOpen)}>
@@ -310,56 +451,92 @@ export default function ReportsCompensation({ localPhotos }) {
                   </div>
                 )}
               </div>
-              <button className="btn back-btn-red" onClick={() => setView(null)}>
+              <button className="btn back-btn-red" onClick={() => {
+                if (selectedDept) setSelectedDept(null);
+                else setView(null);
+              }}>
                 <ArrowLeft size={18} />
                 <span>Back</span>
               </button>
             </div>
           </div>
-          <div className="table reports-payroll-table">
-            <div className="thead">
-              <div className="text-center">UID</div>
-              <div className="text-center">Name</div>
-              <div className="text-center">Base Salary</div>
-              <div className="text-center">Overtime</div>
-              <div className="text-center">Deduction</div>
-              <div className="text-center">Net Pay</div>
-              <div className="text-center">Status</div>
-            </div>
-            {filteredAndSortedPayroll.length > 0 ? (
-              filteredAndSortedPayroll.map((row) => (
-                <div className="trow" key={row.employeeId}>
-                  <div className="text-center uid-text">{row.employeeId}</div>
-                  <div className="namecell-vertical">
-                    <div
-                      className="employee-avatar-small clickable-avatar-small"
-                      onClick={() => localPhotos[row.employeeId] && setFullImageView(localPhotos[row.employeeId])}
-                    >
-                      {localPhotos[row.employeeId] ? (
-                        <img src={localPhotos[row.employeeId]} alt="" />
-                      ) : (
-                        <span className="avatar-initials-small">{(row.employeeName || '?').charAt(0)}</span>
-                      )}
+
+          {!selectedDept ? (
+            <div className="grid-selection" style={{ padding: '24px', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))' }}>
+              {Object.keys(payrollByDept).length > 0 ? (
+                Object.entries(payrollByDept).map(([dept, data]) => (
+                  <div key={dept} className="module-card" onClick={() => setSelectedDept(dept)} style={{ height: '200px' }}>
+                    <div className="module-bg" style={{ backgroundColor: '#f8fafc', backgroundImage: 'none' }} />
+                    <div className="module-overlay" style={{ background: 'linear-gradient(180deg, rgba(255,255,255,0) 0%, rgba(0,0,0,0.05) 100%)' }} />
+                    <div className="module-content-wrapper">
+                      <div className="module-icon" style={{ fontSize: '32px' }}>🏢</div>
+                      <div className="module-content">
+                        <div className="module-title" style={{ color: '#1e293b' }}>{dept}</div>
+                        <div className="module-desc" style={{ color: '#64748b' }}>
+                          {data.employees.length} Employee{data.employees.length !== 1 ? 's' : ''} · Total: ₱{data.totalNet.toLocaleString()}
+                        </div>
+                      </div>
+                      <div className="module-click-hint" style={{ color: '#3b82f6' }}>View Employees →</div>
                     </div>
-                    <span className="employee-name-text">{row.employeeName}</span>
                   </div>
-                  <div className="text-center">{formatPeso(row.baseSalary)}</div>
-                  <div className="text-center">{formatPeso(row.overtime)}</div>
-                  <div className="text-center">{formatPeso(row.deduction)}</div>
-                  <div className="text-center" style={{ fontWeight: 600 }}>{formatPeso(row.netPay)}</div>
-                  <div className="text-center">
-                    <span className={`status ${(row.status || 'draft').toLowerCase()}`}>
-                      {row.status}
-                    </span>
-                  </div>
+                ))
+              ) : (
+                <div className="no-records-row" style={{ gridColumn: '1 / -1' }}>
+                  No generated payroll records found for this period.
                 </div>
-              ))
-            ) : (
-              <div className="no-records-row">
-                No payroll entries with net pay found.
+              )}
+            </div>
+          ) : (
+            <div className="table reports-payroll-table">
+              <div className="thead">
+                <div className="text-center">UID</div>
+                <div className="text-center">Name</div>
+                <div className="text-center">Base Salary</div>
+                <div className="text-center">Overtime</div>
+                <div className="text-center">Deduction</div>
+                <div className="text-center">Net Pay</div>
+                <div className="text-center">Status</div>
               </div>
-            )}
-          </div>
+              {filteredAndSortedPayroll.length > 0 ? (
+                filteredAndSortedPayroll.map((row) => (
+                  <div className="trow" key={row.employeeId}>
+                    <div className="text-center uid-text">{row.employeeId}</div>
+                    <div className="namecell-vertical">
+                      <div
+                        className="employee-avatar-small clickable-avatar-small"
+                        onClick={() => {
+                          const imgUrl = row.avatarUrl ? `${API_BASE}${row.avatarUrl}` : localPhotos[row.employeeId];
+                          if (imgUrl) setFullImageView(imgUrl);
+                        }}
+                      >
+                        {row.avatarUrl ? (
+                          <img src={`${API_BASE}${row.avatarUrl}`} alt="" />
+                        ) : localPhotos[row.employeeId] ? (
+                          <img src={localPhotos[row.employeeId]} alt="" />
+                        ) : (
+                          <span className="avatar-initials-small">{(row.employeeName || '?').charAt(0).toUpperCase()}</span>
+                        )}
+                      </div>
+                      <span className="employee-name-text">{row.employeeName}</span>
+                    </div>
+                    <div className="text-center">{formatPeso(row.baseSalary)}</div>
+                    <div className="text-center">{formatPeso(row.overtime)}</div>
+                    <div className="text-center">{formatPeso(row.deduction)}</div>
+                    <div className="text-center" style={{ fontWeight: 600 }}>{formatPeso(row.netPay)}</div>
+                    <div className="text-center">
+                      <span className={`status ${(row.status || 'draft').toLowerCase()}`}>
+                        {row.status}
+                      </span>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="no-records-row">
+                  No payroll entries found for this department.
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 
@@ -398,18 +575,23 @@ export default function ReportsCompensation({ localPhotos }) {
               <div className="text-center">Status</div>
             </div>
             {payslips.length > 0 ? (
-              payslips.map((p) => (
-                <div className="trow" key={p.uid}>
+              payslips.map((p, idx) => (
+                <div className="trow" key={p.uid || idx}>
                   <div className="text-center uid-text">{p.uid}</div>
                   <div className="namecell-vertical">
                     <div
                       className="employee-avatar-small clickable-avatar-small"
-                      onClick={() => localPhotos[p.uid] && setFullImageView(localPhotos[p.uid])}
+                      onClick={() => {
+                        const imgUrl = p.avatarUrl ? `${API_BASE}${p.avatarUrl}` : localPhotos[p.uid];
+                        if (imgUrl) setFullImageView(imgUrl);
+                      }}
                     >
-                      {localPhotos[p.uid] ? (
+                      {p.avatarUrl ? (
+                        <img src={`${API_BASE}${p.avatarUrl}`} alt="" />
+                      ) : localPhotos[p.uid] ? (
                         <img src={localPhotos[p.uid]} alt="" />
                       ) : (
-                        <span className="avatar-initials-small">{(p.name || '?').charAt(0)}</span>
+                        <span className="avatar-initials-small">{(p.name || '?').charAt(0).toUpperCase()}</span>
                       )}
                     </div>
                     <span className="employee-name-text">{p.name}</span>

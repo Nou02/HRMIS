@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import './Attendance.css';
 import { API_BASE } from '../../lib/api';
-import { Search, X, Filter, ChevronDown, FileDown, FileText, Table, Printer, Users, Clock, Calendar } from 'lucide-react';
+import { Search, X, Filter, ChevronDown, FileDown, FileText, Table, Printer, Users, Clock, Calendar, AlertCircle } from 'lucide-react';
 import dictLogo from '../../assets/Header1.jpg';
 
 const formatTo12Hr = (timeString) => {
@@ -69,12 +69,17 @@ export default function ReportsTimeKeeping({ localPhotos }) {
   const [exportOpen, setExportOpen] = useState(false);
   const [nameSort, setNameSort] = useState('none');
   const [statusFilter, setStatusFilter] = useState('All');
-  const [records, setRecords] = useState([]);
-  const [fullImageView, setFullImageView] = useState(null);
-  const [currentTime, setCurrentTime] = useState(new Date());
-
+  const [rangeFilter, setRangeFilter] = useState('daily');
+  const [selectedMonth, setSelectedMonth] = useState(() => (new Date().getMonth() + 1).toString().padStart(2, '0'));
+  const [selectedYear, setSelectedYear] = useState(() => new Date().getFullYear().toString());
+  const [selectedDate, setSelectedDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const dateInputRef = useRef(null);
   const filterRef = useRef(null);
   const exportRef = useRef(null);
+  const [records, setRecords] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [fullImageView, setFullImageView] = useState(null);
+  const [currentTime, setCurrentTime] = useState(new Date());
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
@@ -91,63 +96,90 @@ export default function ReportsTimeKeeping({ localPhotos }) {
   }, []);
 
   const loadRecords = useCallback(() => {
-    fetch(`${API_BASE}/api/timekeeping`)
+    setLoading(true);
+    const params = new URLSearchParams({
+      date: selectedDate,
+      range: rangeFilter,
+      month: selectedMonth,
+      year: selectedYear,
+      _t: Date.now()
+    });
+    
+    console.log('[ReportsAttendance] Fetching:', params.toString());
+    
+    fetch(`${API_BASE}/api/timekeeping?${params.toString()}`)
       .then(r => r.json())
       .then(data => {
-        const list = Array.isArray(data) ? data : [];
-        if (list.length === 0 && !query) {
-          fetch(`${API_BASE}/api/employees`)
-            .then(r => r.json())
-            .then(emps => {
-              const rows = (emps || []).map(e => ({
-                uid: e.uid,
-                name: e.name,
-                avatarUrl: e.avatarUrl,
-                clockIn: '',
-                clockOut: '',
-                status: 'Present'
-              }));
-              setRecords(rows);
-            });
-        } else {
-          setRecords(list);
-        }
+        console.log('[ReportsAttendance] Received data:', data);
+        setRecords(Array.isArray(data) ? data : []);
       })
-      .catch(() => setRecords([]));
-  }, [query]);
+      .catch(err => {
+        console.error('[ReportsAttendance] Fetch error:', err);
+        setRecords([]);
+      })
+      .finally(() => setLoading(false));
+  }, [selectedDate, rangeFilter, selectedMonth, selectedYear]);
 
-  useEffect(() => { loadRecords(); }, [loadRecords]);
+  // Use a simple mount-only effect to initialize the data.
+  // The user will then use the "Apply Filters" button to update the view.
+  useEffect(() => {
+    loadRecords();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); 
+
+  // Add a listener to auto-refresh when the main date picker changes
+  useEffect(() => {
+    loadRecords();
+  }, [selectedDate]);
 
   const processedRecords = useMemo(() => {
+    // 1. Map API records to table format and calculate stats
     let result = records.map(r => {
+      // Use the raw metrics from the API if available, otherwise calculate
       const raw = calculateAttendanceRaw(r.clockIn, r.clockOut, r.status || 'Present');
+      
       return {
         ...r,
-        totalTime: formatDurationClean(raw.totalMin),
-        late: raw.lateMin > 0 ? formatDurationClean(raw.lateMin) : '-',
-        overtime: raw.otMin > 0 ? formatDurationClean(raw.otMin) : '-',
+        totalTime: r.totalTime !== '-' ? r.totalTime : formatDurationClean(raw.totalMin),
+        late: (r.totalLate && r.totalLate !== '-') ? formatDurationClean(parseInt(r.totalLate)) : (raw.lateMin > 0 ? formatDurationClean(raw.lateMin) : '-'),
+        overtime: r.totalOvertime !== '-' ? r.totalOvertime : (raw.otMin > 0 ? formatDurationClean(raw.otMin) : '-'),
         rawTime: raw.totalMin,
         rawLate: raw.lateMin,
         rawOT: raw.otMin
       };
     });
 
+    // 2. Apply search and status filters (Backend already handled range filtering)
     if (query) {
       const q = query.toLowerCase();
-      result = result.filter(r => r.uid.toLowerCase().includes(q) || r.name.toLowerCase().includes(q));
+      result = result.filter(r => 
+        (r.uid || '').toLowerCase().includes(q) || 
+        (r.name || '').toLowerCase().includes(q)
+      );
     }
-    if (statusFilter !== 'All') result = result.filter(r => r.status === statusFilter);
 
+    if (statusFilter && statusFilter !== 'All') {
+      result = result.filter(r => r.status === statusFilter);
+    }
+
+    // 3. Sorting
     const statusPriority = { 'Present': 1, 'Travel': 2, 'HalfDay': 3, 'On Leave': 4, 'Absent': 5 };
     result.sort((a, b) => {
+      // First priority: Status
       const priorityA = statusPriority[a.status] || 99;
       const priorityB = statusPriority[b.status] || 99;
       if (priorityA !== priorityB) return priorityA - priorityB;
+      
+      // Second priority: Date (Newest first)
+      const dateA = a.date || '';
+      const dateB = b.date || '';
+      if (dateA !== dateB) return dateB.localeCompare(dateA);
+
+      // Third priority: Name
       if (nameSort === 'asc') return (a.name || '').localeCompare(b.name || '');
       if (nameSort === 'desc') return (b.name || '').localeCompare(a.name || '');
-      const timeA = a.clockIn && a.clockIn !== '-' ? a.clockIn : '23:59';
-      const timeB = b.clockIn && b.clockIn !== '-' ? b.clockIn : '23:59';
-      return timeA.localeCompare(timeB);
+
+      return 0;
     });
 
     return result;
@@ -155,13 +187,13 @@ export default function ReportsTimeKeeping({ localPhotos }) {
 
   const stats = useMemo(() => {
     return {
-      present: records.filter(r => r.status === 'Present').length,
-      travel: records.filter(r => r.status === 'Travel').length,
-      halfDay: records.filter(r => r.status === 'HalfDay').length,
-      leave: records.filter(r => r.status === 'On Leave').length,
-      absent: records.filter(r => r.status === 'Absent').length,
+      present: processedRecords.filter(r => r.status === 'Present').length,
+      travel: processedRecords.filter(r => r.status === 'Travel').length,
+      halfDay: processedRecords.filter(r => r.status === 'HalfDay').length,
+      leave: processedRecords.filter(r => r.status === 'On Leave').length,
+      absent: processedRecords.filter(r => r.status === 'Absent').length,
     };
-  }, [records]);
+  }, [processedRecords]);
 
   const getExportFileName = () => {
     const d = new Date();
@@ -182,10 +214,10 @@ export default function ReportsTimeKeeping({ localPhotos }) {
   };
 
   const downloadCSV = () => {
-    const headers = ['UID', 'Name', 'Clock In', 'Clock Out', 'Total Time', 'Late', 'Overtime', 'Status'];
+    const headers = ['Date', 'UID', 'Name', 'Clock In', 'Clock Out', 'Total Time', 'Late', 'Overtime', 'Status'];
     const csv = [headers.join(',')].concat(
       processedRecords.map(r => [
-        r.uid, r.name, formatTo12Hr(r.clockIn), formatTo12Hr(r.clockOut), r.totalTime, r.late, r.overtime, r.status
+        r.date, r.uid, r.name, formatTo12Hr(r.clockIn), formatTo12Hr(r.clockOut), r.totalTime, r.late, r.overtime, r.status
       ].map(v => `"${String(v ?? '').replace(/"/g, '""')}"`).join(','))
     ).join('\n');
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
@@ -198,6 +230,7 @@ export default function ReportsTimeKeeping({ localPhotos }) {
   const downloadExcel = () => {
     const tableRows = processedRecords.map(r => `
       <tr>
+        <td style="text-align: center; border: 1px solid #e5e7eb; padding: 8px;">${r.date || '-'}</td>
         <td style="text-align: center; border: 1px solid #e5e7eb; padding: 8px;">${r.uid}</td>
         <td style="text-align: center; border: 1px solid #e5e7eb; padding: 8px;">${r.name}</td>
         <td style="text-align: center; border: 1px solid #e5e7eb; padding: 8px;">${formatTo12Hr(r.clockIn)}</td>
@@ -209,16 +242,19 @@ export default function ReportsTimeKeeping({ localPhotos }) {
       </tr>`).join('');
 
     const html = `<html><head><meta charset="UTF-8"></head><body>
+      <h2 style="text-align: center;">Attendance Logs (${rangeFilter.toUpperCase()})</h2>
+      <p style="text-align: center;">Reference Date: ${new Date(selectedDate).toLocaleDateString()}</p>
       <table style="border-collapse: collapse; width: 100%;">
         <thead><tr style="background-color: #f1f5f9;">
-          <th style="border: 1px solid #e5e7eb; border-bottom: 2.5pt solid #000000; padding: 12px; text-align: center;">UID</th>
-          <th style="border: 1px solid #e5e7eb; border-bottom: 2.5pt solid #000000; padding: 12px; text-align: center;">Name</th>
-          <th style="border: 1px solid #e5e7eb; border-bottom: 2.5pt solid #000000; padding: 12px; text-align: center;">Clock In</th>
-          <th style="border: 1px solid #e5e7eb; border-bottom: 2.5pt solid #000000; padding: 12px; text-align: center;">Clock Out</th>
-          <th style="border: 1px solid #e5e7eb; border-bottom: 2.5pt solid #000000; padding: 12px; text-align: center;">Total Time</th>
-          <th style="border: 1px solid #e5e7eb; border-bottom: 2.5pt solid #000000; padding: 12px; text-align: center;">Late</th>
-          <th style="border: 1px solid #e5e7eb; border-bottom: 2.5pt solid #000000; padding: 12px; text-align: center;">Overtime</th>
-          <th style="border: 1px solid #e5e7eb; border-bottom: 2.5pt solid #000000; padding: 12px; text-align: center;">Status</th>
+          <th style="border: 1px solid #e5e7eb; padding: 12px;">Date</th>
+          <th style="border: 1px solid #e5e7eb; padding: 12px;">UID</th>
+          <th style="border: 1px solid #e5e7eb; padding: 12px;">Name</th>
+          <th style="border: 1px solid #e5e7eb; padding: 12px;">Clock In</th>
+          <th style="border: 1px solid #e5e7eb; padding: 12px;">Clock Out</th>
+          <th style="border: 1px solid #e5e7eb; padding: 12px;">Total Time</th>
+          <th style="border: 1px solid #e5e7eb; padding: 12px;">Late</th>
+          <th style="border: 1px solid #e5e7eb; padding: 12px;">Overtime</th>
+          <th style="border: 1px solid #e5e7eb; padding: 12px;">Status</th>
         </tr></thead><tbody>${tableRows}</tbody></table></body></html>`;
 
     const blob = new Blob([html], { type: 'application/vnd.ms-excel' });
@@ -314,8 +350,14 @@ export default function ReportsTimeKeeping({ localPhotos }) {
     }, 500);
   };
 
+  const displayDate = useMemo(() => {
+    if (!selectedDate) return new Date();
+    const [y, m, d] = selectedDate.split('-').map(Number);
+    return new Date(y, m - 1, d);
+  }, [selectedDate]);
+
   return (
-    <div className="screen">
+    <div className="screen reports-attendance-table">
       {fullImageView && (
         <div className="image-viewer-overlay" onClick={() => setFullImageView(null)}>
           <button className="viewer-close">✕</button>
@@ -325,8 +367,16 @@ export default function ReportsTimeKeeping({ localPhotos }) {
 
       <div className="screen-header">
         <div className="header-text">
-          <div className="title">Attendance Logs</div>
-          <div className="page-description">Generate and export official employee attendance documentation</div>
+          <div className="title">
+            Attendance Logs 
+            <span style={{ fontSize: '14px', color: '#64748b', fontWeight: 'normal', marginLeft: '12px' }}>
+              ({rangeFilter.charAt(0).toUpperCase() + rangeFilter.slice(1)} View 
+              {rangeFilter === 'monthly' ? `: ${new Date(2000, parseInt(selectedMonth)-1).toLocaleString('default', { month: 'long' })} ${selectedYear}` : 
+               rangeFilter === 'yearly' ? `: ${selectedYear}` : 
+               rangeFilter === 'daily' ? `: ${new Date(selectedDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}` : ''})
+            </span>
+          </div>
+          <div className="page-description">Detailed history of employee daily attendance and shifts</div>
         </div>
       </div>
 
@@ -365,14 +415,21 @@ export default function ReportsTimeKeeping({ localPhotos }) {
           </div>
         </div>
 
-        <div className="calendar-metric">
+        <div className="calendar-metric clickable-metric" onClick={() => dateInputRef.current?.showPicker()}>
+          <input 
+            type="date" 
+            ref={dateInputRef} 
+            style={{ position: 'absolute', opacity: 0, pointerEvents: 'none', width: 0 }} 
+            value={selectedDate}
+            onChange={(e) => setSelectedDate(e.target.value)}
+          />
           <div className="calendar-left">
-            <div className="cal-month">{currentTime.toLocaleString('default', { month: 'short' }).toUpperCase()}</div>
-            <div className="cal-day">{currentTime.getDate()}</div>
-            <div className="cal-year">{currentTime.getFullYear()}</div>
+            <div className="cal-month">{displayDate.toLocaleString('default', { month: 'short' }).toUpperCase()}</div>
+            <div className="cal-day">{displayDate.getDate()}</div>
+            <div className="cal-year">{displayDate.getFullYear()}</div>
           </div>
           <div className="calendar-right">
-            <div className="cal-weekday">{currentTime.toLocaleString('default', { weekday: 'long' })}</div>
+            <div className="cal-weekday">{displayDate.toLocaleString('default', { weekday: 'long' })}</div>
             <div className="cal-time">
                 <Clock size={14} style={{ marginRight: '6px' }} />
                 {currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
@@ -383,12 +440,12 @@ export default function ReportsTimeKeeping({ localPhotos }) {
 
       <div className="card">
         <div className="card-header overflow-visible">
-          <div className="card-title">Documented Attendance Logs</div>
+          <div className="card-title">Attendance History</div>
           <div className="card-actions">
             <div className="search">
               <Search size={18} className="search-icon" />
               <input placeholder="Search UID, Name, ..." value={query} onChange={(e) => setQuery(e.target.value)} />
-              {query && <X size={14} className="search-clear" onClick={() => setQuery('')} />}
+              {query && <button className="search-clear-btn" onClick={() => setQuery('')}><X size={14} /></button>}
             </div>
 
             <div className="dropdown" ref={filterRef}>
@@ -396,7 +453,49 @@ export default function ReportsTimeKeeping({ localPhotos }) {
               {filtersOpen && (
                 <div className="dropdown-menu">
                   <div className="form-col" style={{ marginBottom: '16px' }}>
-                    <label className="field-label">Name</label>
+                    <label className="field-label">Time Range</label>
+                    <select className="select" value={rangeFilter} onChange={(e) => setRangeFilter(e.target.value)}>
+                      <option value="daily">Daily</option>
+                      <option value="weekly">Weekly</option>
+                      <option value="monthly">Monthly</option>
+                      <option value="yearly">Yearly</option>
+                    </select>
+                  </div>
+                  
+                  {rangeFilter === 'monthly' && (
+                    <div className="form-row" style={{ gap: '8px', marginBottom: '16px' }}>
+                      <div className="form-col" style={{ flex: 1 }}>
+                        <label className="field-label">Month</label>
+                        <select className="select" value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)}>
+                          {['01','02','03','04','05','06','07','08','09','10','11','12'].map(m => (
+                            <option key={m} value={m}>{new Date(2000, parseInt(m)-1).toLocaleString('default', { month: 'long' })}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="form-col" style={{ flex: 1 }}>
+                        <label className="field-label">Year</label>
+                        <select className="select" value={selectedYear} onChange={(e) => setSelectedYear(e.target.value)}>
+                          {[2024, 2025, 2026, 2027, 2028].map(y => (
+                            <option key={y} value={y}>{y}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                  )}
+
+                  {rangeFilter === 'yearly' && (
+                    <div className="form-col" style={{ marginBottom: '16px' }}>
+                      <label className="field-label">Year</label>
+                      <select className="select" value={selectedYear} onChange={(e) => setSelectedYear(e.target.value)}>
+                        {[2024, 2025, 2026, 2027, 2028].map(y => (
+                          <option key={y} value={y}>{y}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+
+                  <div className="form-col" style={{ marginBottom: '16px' }}>
+                    <label className="field-label">Name Sort</label>
                     <select className="select" value={nameSort} onChange={(e) => setNameSort(e.target.value)}>
                       <option value="none">None</option>
                       <option value="asc">Ascending (A–Z)</option>
@@ -406,13 +505,28 @@ export default function ReportsTimeKeeping({ localPhotos }) {
                   <div className="form-col">
                     <label className="field-label">Status</label>
                     <select className="select" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
-                      <option value="All">All Statuses</option>
+                      <option value="All">All Status</option>
                       <option value="Present">Present</option>
-                      <option value="HalfDay">Half Day</option>
                       <option value="Travel">Travel</option>
+                      <option value="HalfDay">HalfDay</option>
                       <option value="On Leave">On Leave</option>
                       <option value="Absent">Absent</option>
                     </select>
+                  </div>
+
+                  <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
+                    <button 
+                      className="btn primary" 
+                      style={{ flex: 1, padding: '8px' }} 
+                      onClick={() => {
+                        loadRecords();
+                        setFiltersOpen(false);
+                      }}
+                      disabled={loading}
+                    >
+                      {loading ? 'Applying...' : 'Apply Filters'}
+                    </button>
+                    <button className="btn light" style={{ flex: 1, padding: '8px' }} onClick={() => setFiltersOpen(false)}>Close</button>
                   </div>
                 </div>
               )}
@@ -436,6 +550,7 @@ export default function ReportsTimeKeeping({ localPhotos }) {
         <div className="table-container">
           <div className="table reports-attendance-table">
             <div className="thead">
+              <div className="text-center">DATE</div>
               <div className="text-center">UID</div>
               <div className="text-center">NAME</div>
               <div className="text-center">CLOCK IN</div>
@@ -446,11 +561,32 @@ export default function ReportsTimeKeeping({ localPhotos }) {
               <div className="text-center">STATUS</div>
             </div>
 
-            {processedRecords.length === 0 ? (
-              <div className="no-records-row">No record(s) found/added</div>
+            {loading ? (
+              <div className="no-records-row" style={{ padding: '40px' }}>
+                <div className="loading-spinner">Loading logs...</div>
+              </div>
+            ) : processedRecords.length === 0 ? (
+              <div className="no-records-row" style={{ padding: '40px', color: '#64748b' }}>
+                No records found for {rangeFilter} view 
+                {rangeFilter === 'monthly' ? ` (${new Date(2000, parseInt(selectedMonth)-1).toLocaleString('default', { month: 'long' })} ${selectedYear})` : 
+                 rangeFilter === 'yearly' ? ` (${selectedYear})` : 
+                 rangeFilter === 'daily' ? ` (${new Date(selectedDate).toLocaleDateString()})` : ''}
+              </div>
             ) : (
-              processedRecords.map((row) => (
-                <div className="trow" key={row.uid}>
+              processedRecords.map((row, idx) => (
+                <div className="trow" key={row.id || `${row.uid}-${row.date}-${idx}`}>
+                  <div className="text-center" style={{ fontSize: '12px', color: '#64748b' }}>
+                    {(() => {
+                      if (!row.date) return '-';
+                      // If row.date is already YYYY-MM-DD, parse it carefully to avoid timezone shifts
+                      const parts = row.date.split('-');
+                      if (parts.length === 3) {
+                        const d = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+                        return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                      }
+                      return new Date(row.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                    })()}
+                  </div>
                   <div className="text-center uid-text">{row.uid}</div>
                   <div className="namecell">
                     <div className="employee-avatar clickable-avatar avatar-border" onClick={() => {

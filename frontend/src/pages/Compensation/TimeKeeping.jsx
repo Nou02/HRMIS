@@ -28,53 +28,70 @@ const getCurrentTimeStr = () => {
   return `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
 };
 
-const calculateAttendanceRaw = (clockIn, clockOut, status, dateStr) => {
-  if (status === 'Absent' || status === 'On Leave' || !clockIn || !clockOut || clockIn === '-' || clockOut === '-') {
+const calculateAttendanceRaw = (clockIn, clockOut, status, dateStr, timeInFilter) => {
+  let lateMin = 0;
+  let totalMin = 0;
+  let otMin = 0;
+
+  if (status === 'Absent' || status === 'On Leave') {
     return { totalMin: 0, lateMin: 0, otMin: 0 };
   }
 
-  const [inH, inM] = clockIn.split(':').map(Number);
-  const [outH, outM] = clockOut.split(':').map(Number);
-  
-  let year, month, day;
-  if (dateStr) {
-    const parts = dateStr.split('-').map(Number);
-    year = parts[0];
-    month = parts[1] - 1; // JS months are 0-indexed
-    day = parts[2];
-  } else {
-    const now = new Date();
-    year = now.getFullYear();
-    month = now.getMonth();
-    day = now.getDate();
+  // 1. Calculate Late (only needs clockIn)
+  if (clockIn && clockIn !== '-') {
+    const [inH, inM] = clockIn.split(':').map(Number);
+    const totalInMins = inH * 60 + inM;
+    
+    let lateThresholdMins;
+    let baseMins;
+
+    if (timeInFilter) {
+      const [fH, fM] = timeInFilter.split(':').map(Number);
+      baseMins = fH * 60 + fM;
+      lateThresholdMins = baseMins + 60; // 1 hour grace period
+    } else {
+      const isSevenAmShift = (inH < 7) || (inH === 7 && inM <= 30);
+      baseMins = isSevenAmShift ? 420 : 510; // 7:00 AM or 8:30 AM
+      lateThresholdMins = baseMins; // No grace period for default shifts
+    }
+
+    if (totalInMins >= lateThresholdMins) {
+      lateMin = totalInMins - baseMins;
+    }
   }
 
-  const inDate = new Date(year, month, day, inH, inM);
-  const outDate = new Date(year, month, day, outH, outM);
-  
-  let diffMin = (outDate - inDate) / (1000 * 60);
-  if (diffMin < 0) return { totalMin: 0, lateMin: 0, otMin: 0 };
+  // 2. Calculate Total Time & OT (needs both clockIn and clockOut)
+  if (clockIn && clockIn !== '-' && clockOut && clockOut !== '-') {
+    const [inH, inM] = clockIn.split(':').map(Number);
+    const [outH, outM] = clockOut.split(':').map(Number);
+    
+    let year, month, day;
+    if (dateStr) {
+      const parts = dateStr.split('-').map(Number);
+      year = parts[0];
+      month = parts[1] - 1; 
+      day = parts[2];
+    } else {
+      const now = new Date();
+      year = now.getFullYear();
+      month = now.getMonth();
+      day = now.getDate();
+    }
 
-  const netMin = Math.max(0, diffMin - 60);
-  const isSevenAmShift = (inH < 7) || (inH === 7 && inM <= 30);
-  const scheduledInH = isSevenAmShift ? 7 : 8;
-  const scheduledInM = isSevenAmShift ? 0 : 30; // Late after 8:30 AM (or 7:00 AM)
-  const scheduledOutH = 18; // Overtime starts after 6:00 PM
-
-  let lateMin = 0;
-  const totalInMins = inH * 60 + inM;
-  const totalScheduledMins = scheduledInH * 60 + scheduledInM;
-  
-  if (totalInMins > totalScheduledMins) {
-    lateMin = totalInMins - totalScheduledMins;
+    const inDate = new Date(year, month, day, inH, inM);
+    const outDate = new Date(year, month, day, outH, outM);
+    
+    let diffMin = (outDate - inDate) / (1000 * 60);
+    if (diffMin > 0) {
+      totalMin = Math.max(0, diffMin - 60);
+      const scheduledOutH = 18; 
+      if (outH > scheduledOutH || (outH === scheduledOutH && outM > 0)) {
+        otMin = (outH - scheduledOutH) * 60 + outM;
+      }
+    }
   }
 
-  let otMin = 0;
-  if (outH > scheduledOutH || (outH === scheduledOutH && outM > 0)) {
-    otMin = (outH - scheduledOutH) * 60 + outM;
-  }
-
-  return { totalMin: netMin, lateMin, otMin };
+  return { totalMin, lateMin, otMin };
 };
 
 export default function TimeKeeping({ localPhotos, setLocalPhotos }) {
@@ -82,6 +99,8 @@ export default function TimeKeeping({ localPhotos, setLocalPhotos }) {
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [nameSort, setNameSort] = useState('none');
   const [statusFilter, setStatusFilter] = useState('All');
+  const [timeInFilter, setTimeInFilter] = useState(() => localStorage.getItem('tk_timeInFilter') || '');
+  const [timeOutFilter, setTimeOutFilter] = useState(() => localStorage.getItem('tk_timeOutFilter') || '');
   const [records, setRecords] = useState([]);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingUid, setEditingUid] = useState(null);
@@ -96,6 +115,14 @@ export default function TimeKeeping({ localPhotos, setLocalPhotos }) {
   };
 
   const [selectedDate, setSelectedDate] = useState(getLocalDateString());
+
+  useEffect(() => {
+    localStorage.setItem('tk_timeInFilter', timeInFilter);
+  }, [timeInFilter]);
+
+  useEffect(() => {
+    localStorage.setItem('tk_timeOutFilter', timeOutFilter);
+  }, [timeOutFilter]);
 
   const [employees, setEmployees] = useState([]);
 
@@ -127,7 +154,8 @@ export default function TimeKeeping({ localPhotos, setLocalPhotos }) {
 
   const loadRecords = useCallback((targetDate) => {
     const activeDate = targetDate || selectedDate;
-    fetch(`${API_BASE}/api/timekeeping?date=${activeDate}&_t=${Date.now()}`)
+    const timeParams = `&timeIn=${timeInFilter}&timeOut=${timeOutFilter}`;
+    fetch(`${API_BASE}/api/timekeeping?date=${activeDate}${timeParams}&_t=${Date.now()}`)
       .then(r => r.json())
       .then(data => {
         // Only update if the date we fetched for is still the selected date
@@ -147,9 +175,10 @@ export default function TimeKeeping({ localPhotos, setLocalPhotos }) {
     let isMounted = true;
     const currentSelectedDate = selectedDate;
     
-    setRecords([]); // Clear records when date changes to avoid showing stale data
+    setRecords([]); // Clear records when filters change to avoid showing stale data
     
-    fetch(`${API_BASE}/api/timekeeping?date=${currentSelectedDate}&_t=${Date.now()}`)
+    const timeParams = `&timeIn=${timeInFilter}&timeOut=${timeOutFilter}`;
+    fetch(`${API_BASE}/api/timekeeping?date=${currentSelectedDate}${timeParams}&_t=${Date.now()}`)
       .then(r => r.json())
       .then(data => {
         if (isMounted && currentSelectedDate === selectedDate) {
@@ -164,7 +193,7 @@ export default function TimeKeeping({ localPhotos, setLocalPhotos }) {
       });
 
     return () => { isMounted = false; };
-  }, [selectedDate]);
+  }, [selectedDate, timeInFilter, timeOutFilter]);
 
   const deleteRecord = (uid) => {
     if (!window.confirm("Are you sure you want to delete this record?")) return;
@@ -184,7 +213,7 @@ export default function TimeKeeping({ localPhotos, setLocalPhotos }) {
       const hasRecord = r.clockIn && r.clockIn !== '-' || r.clockOut && r.clockOut !== '-' || r.status !== 'Absent';
       
       const raw = hasRecord 
-        ? calculateAttendanceRaw(r.clockIn, r.clockOut, r.status || 'Present', selectedDate)
+        ? calculateAttendanceRaw(r.clockIn, r.clockOut, r.status || 'Present', selectedDate, timeInFilter)
         : { totalMin: 0, lateMin: 0, otMin: 0 };
 
       return {
@@ -223,7 +252,7 @@ export default function TimeKeeping({ localPhotos, setLocalPhotos }) {
     });
 
     return result;
-  }, [records, query, statusFilter, nameSort, selectedDate]);
+  }, [records, query, statusFilter, nameSort, selectedDate, timeInFilter]);
 
   const stats = useMemo(() => {
     const presentCount = records.filter(r => r.status === 'Present').length;
@@ -328,33 +357,12 @@ export default function TimeKeeping({ localPhotos, setLocalPhotos }) {
       </div>
 
       <div className="attendance-dashboard-metrics">
-        <div className="mega-metric">
-          <div className="mega-metric-header">
-            <Users size={20} />
-            <span>Time Keeping Summary</span>
-          </div>
-          <div className="mega-metric-content">
-            <div className="status-item present">
-              <span className="label">Total Attendance</span>
-              <span className="count">{stats.presentCount}</span>
-            </div>
-            <div className="status-item travel">
-              <span className="label">Total Time</span>
-              <span className="count">{stats.totalTime}</span>
-            </div>
-            <div className="status-item leave">
-              <span className="label">Late</span>
-              <span className="count">{stats.totalLate}</span>
-            </div>
-            <div className="status-item halfday">
-              <span className="label">Overtime</span>
-              <span className="count">{stats.totalOT}</span>
-            </div>
-            <div className="status-item absent">
-              <span className="label">Absent</span>
-              <span className="count">{stats.absentCount}</span>
-            </div>
-          </div>
+        <div className="grid-5">
+          <Metric label="Total Attendance" value={stats.presentCount} icon={<Users size={20} />} />
+          <Metric label="Total Time" value={stats.totalTime} icon={<Clock size={20} />} />
+          <Metric label="Late" value={stats.totalLate} icon={<AlertCircle size={20} />} />
+          <Metric label="Overtime" value={stats.totalOT} icon={<Clock size={20} />} />
+          <Metric label="Absent" value={stats.absentCount} icon={<Users size={20} />} />
         </div>
 
         <div className="calendar-metric clickable-metric" onClick={() => dateInputRef.current?.showPicker()}>
@@ -384,10 +392,57 @@ export default function TimeKeeping({ localPhotos, setLocalPhotos }) {
         <div className="card-header overflow-visible">
           <div className="card-title">Time Keeping Records</div>
           <div className="card-actions">
+            <div className="time-scope-filters" style={{ display: 'flex', gap: '8px', marginRight: '8px' }}>
+              <div style={{ position: 'relative' }}>
+                <input 
+                  type="time" 
+                  className="input small" 
+                  style={{ padding: '4px 8px', fontSize: '12px', height: '36px' }}
+                  value={timeInFilter}
+                  onChange={(e) => setTimeInFilter(e.target.value)}
+                  title="Filter by Time-In scope"
+                />
+                {timeInFilter && (
+                  <button 
+                    onClick={() => setTimeInFilter('')} 
+                    style={{ position: 'absolute', right: '4px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8' }}
+                  >
+                    <X size={12} />
+                  </button>
+                )}
+              </div>
+              <div style={{ position: 'relative' }}>
+                <input 
+                  type="time" 
+                  className="input small" 
+                  style={{ padding: '4px 8px', fontSize: '12px', height: '36px' }}
+                  value={timeOutFilter}
+                  onChange={(e) => setTimeOutFilter(e.target.value)}
+                  title="Filter by Time-Out scope"
+                />
+                {timeOutFilter && (
+                  <button 
+                    onClick={() => setTimeOutFilter('')} 
+                    style={{ position: 'absolute', right: '4px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8' }}
+                  >
+                    <X size={12} />
+                  </button>
+                )}
+              </div>
+            </div>
             <div className="search">
               <Search size={18} className="search-icon" />
-              <input ref={searchInputRef} placeholder="Search UID, Name, ..." value={query} onChange={(e) => setQuery(e.target.value)} />
-              {query && <X size={14} className="search-clear" onClick={() => setQuery('')} />}
+              <input
+                ref={searchInputRef}
+                placeholder="Search UID, Name, ..."
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+              />
+              {query && (
+                <button className="search-clear-btn" onClick={() => setQuery('')}>
+                  <X size={14} />
+                </button>
+              )}
             </div>
 
             <div className="dropdown" ref={filterRef}>
@@ -563,6 +618,18 @@ export default function TimeKeeping({ localPhotos, setLocalPhotos }) {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function Metric({ label, value, icon }) {
+  return (
+    <div className="metric">
+      <div className="metric-content">
+        <div className="metric-label">{label}</div>
+        <div className="metric-value">{value}</div>
+      </div>
+      <div className="metric-icon">{icon}</div>
     </div>
   );
 }

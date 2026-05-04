@@ -39,53 +39,45 @@
   margin-bottom: 32px;
 }
 
-.mega-metric {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  padding: 24px;
+.grid-5 {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 16px;
+}
+
+.metric {
+  background: #fff;
   border: 1px solid var(--border);
   border-radius: 16px;
-  background: #fff;
-}
-
-.mega-metric-header {
+  padding: 20px;
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 20px;
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--text);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
+  justify-content: space-between;
 }
 
-.mega-metric-content {
-  display: flex;
-  align-items: center;
-  justify-content: space-around;
-}
-
-.status-item {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-}
-
-.status-item .label {
+.metric-label {
   font-size: 11px;
   font-weight: 600;
   color: var(--muted);
   text-transform: uppercase;
-  text-align: center;
+  margin-bottom: 4px;
 }
 
-.status-item .count {
-  font-size: 24px;
-  font-weight: 800;
+.metric-value {
+  font-size: 20px;
+  font-weight: 700;
   color: var(--text);
+}
+
+.metric-icon {
+  background: #f1f5f9;
+  color: var(--primary);
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .calendar-metric {

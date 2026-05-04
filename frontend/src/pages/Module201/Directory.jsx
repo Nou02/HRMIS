@@ -248,7 +248,7 @@ export default function EmployeesList({ localPhotos, setLocalPhotos }) {
                     <select className="select" value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)}>
                       <option value="all">All Categories</option>
                       <option value="Job Order">Job Order</option>
-                      <option value="Regular Employees">Regular Employees</option>
+                      <option value="Regular">Regular</option>
                       <option value="Admin">Admin</option>
                     </select>
                   </div>
@@ -343,7 +343,7 @@ export default function EmployeesList({ localPhotos, setLocalPhotos }) {
                   <select className="select" value={form.employmentCategory} onChange={(e) => setForm({ ...form, employmentCategory: e.target.value })}>
                     <option value="">Select Category</option>
                     <option value="Job Order">Job Order</option>
-                    <option value="Regular Employees">Regular Employees</option>
+                    <option value="Regular">Regular</option>
                     <option value="Admin">Admin</option>
                   </select>
                 </div>

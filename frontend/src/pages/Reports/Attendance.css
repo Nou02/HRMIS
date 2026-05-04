@@ -247,7 +247,7 @@
 .reports-attendance-table .thead,
 .reports-attendance-table .trow {
   display: grid;
-  grid-template-columns: 100px 180px 100px 100px 100px 80px 100px 1fr;
+  grid-template-columns: 80px 80px 180px 100px 100px 100px 80px 100px 1fr;
   gap: 15px;
   padding: 12px 15px;
   align-items: center;

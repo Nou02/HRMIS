@@ -6,7 +6,7 @@ module.exports = (db) => {
       const [rows] = await db.query(`
         SELECT
           SUM(CASE WHEN employment_category='Job Order' THEN 1 ELSE 0 END) AS jobOrderCount,
-          SUM(CASE WHEN employment_category='Regular Employees' THEN 1 ELSE 0 END) AS regularEmployeeCount,
+          SUM(CASE WHEN employment_category='Regular' THEN 1 ELSE 0 END) AS regularEmployeeCount,
           SUM(CASE WHEN employment_category='Admin' THEN 1 ELSE 0 END) AS adminCount,
           COUNT(*) AS totalEmployees
         FROM employees

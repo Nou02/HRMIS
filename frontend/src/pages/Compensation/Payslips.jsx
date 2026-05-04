@@ -16,6 +16,13 @@ function Metric({ label, value, icon }) {
 }
 
 export default function Payslips({ localPhotos }) {
+  const [period, setPeriod] = useState(() => {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const periodNum = now.getDate() <= 15 ? 1 : 2;
+    return `P${periodNum}-${year}-${month}`;
+  });
   const [query, setQuery] = useState('');
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [nameSort, setNameSort] = useState('none');
@@ -38,7 +45,7 @@ export default function Payslips({ localPhotos }) {
 
   const displayCellValue = (val) => {
     const s = String(val ?? '').trim();
-    if (s === '0' || s === '0.00' || s === '₱0' || s === '₱0.00' || s === '') return '-';
+    if (s === '0' || s === '0.00' || s === '₱0' || s === '₱0.00' || s === '' || s === '-' || s === '—') return '₱0.00';
     return val;
   };
 
@@ -52,48 +59,28 @@ export default function Payslips({ localPhotos }) {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [filtersOpen]);
 
-  const loadSummary = () => {
-    fetch(`${API_BASE}/api/payroll/summary`)
+  const loadSummary = (p = period) => {
+    fetch(`${API_BASE}/api/payroll/summary?period=${encodeURIComponent(p)}`)
       .then((r) => r.json())
       .then(setSummary)
       .catch(() => {});
   };
 
-  const loadList = () => {
+  const loadList = (p = period) => {
     const params = new URLSearchParams();
     if (query) params.set('q', query);
+    params.set('period', p);
 
-    fetch(`${API_BASE}/api/payslips${params.toString() ? `?${params.toString()}` : ''}`)
+    fetch(`${API_BASE}/api/payslips?${params.toString()}`)
       .then((r) => r.json())
       .then((data) => {
-        let items = Array.isArray(data) ? data : [];
-        
-        if (items.length === 0 && !query) {
-          fetch(`${API_BASE}/api/employees`)
-            .then((r) => r.json())
-            .then((emps) => {
-              const rows = (emps || []).map((e) => ({
-                id: e.uid,
-                uid: e.uid,
-                name: e.name,
-                avatarUrl: e.avatarUrl,
-                role: e.employmentCategory || 'Staff',
-                gross: '-',
-                bonus: '-',
-                deductions: '-',
-                netPay: '-',
-                period: '-',
-                status: 'Draft',
-                statusClass: 'draft'
-              }));
-              applySort(rows);
-            })
-            .catch(() => setList([]));
-        } else {
-          applySort(items);
-        }
+        // Backend now handles the employee list join, so we just apply sort and set data
+        applySort(Array.isArray(data) ? data : []);
       })
-      .catch(() => {});
+      .catch((err) => {
+        console.error('[Payslips] loadList error:', err);
+        setList([]);
+      });
   };
 
   const applySort = (items) => {
@@ -117,13 +104,34 @@ export default function Payslips({ localPhotos }) {
   };
 
   useEffect(() => {
-    loadSummary();
-    loadList();
-  }, [query, nameSort]);
+    loadSummary(period);
+    loadList(period);
+  }, [query, nameSort, period]);
 
   const handleClearSearch = () => {
     setQuery('');
     if (searchInputRef.current) searchInputRef.current.focus();
+  };
+
+  const handleGetFromPayroll = () => {
+    if (!form.uid || !form.period) return;
+    fetch(`${API_BASE}/api/payroll/records/${encodeURIComponent(form.uid)}?period=${form.period}`)
+      .then(res => {
+        if (!res.ok) throw new Error('No payroll record found for this period');
+        return res.json();
+      })
+      .then(data => {
+        setForm(prev => ({
+          ...prev,
+          gross: String(data.baseSalary || '0').replace(/[^\d.-]/g, ''),
+          bonus: String(data.overtimeAmount || '0').replace(/[^\d.-]/g, ''),
+          deductions: String(data.deduction || '0').replace(/[^\d.-]/g, ''),
+        }));
+      })
+      .catch(err => {
+        console.error('Sync error:', err);
+        alert(err.message);
+      });
   };
 
   function openProceed(p) {
@@ -138,19 +146,55 @@ export default function Payslips({ localPhotos }) {
     setModalOpen(true);
   }
 
-  function confirmPayslip(e) {
-    e.preventDefault();
+  function handleSavePayslip(e, isConfirm = false) {
+    if (e) e.preventDefault();
     fetch(`${API_BASE}/api/payslips/${encodeURIComponent(form.uid)}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...form, confirm: true }),
+      body: JSON.stringify({ ...form, confirm: isConfirm }),
     })
-      .then((r) => r.json())
-      .then(() => {
-        setModalOpen(false);
-        loadList();
+      .then((r) => {
+        if (!r.ok) return r.json().then(err => { throw new Error(err.error || 'Failed to save payslip'); });
+        return r.json();
       })
-      .catch(() => {});
+      .then(() => {
+        alert(isConfirm ? 'Payslip confirmed and issued successfully!' : 'Payslip saved as draft.');
+        setModalOpen(false);
+        loadList(period);
+        loadSummary(period);
+      })
+      .catch(err => {
+        console.error('Save error:', err);
+        alert(err.message);
+      });
+  }
+
+  function formatPeriodReadable(p) {
+    if (!p || p === '-' || p === '—') return p;
+    const match = String(p).match(/^P(\d)-(\d{4})-(\d{2})$/);
+    if (!match) return p;
+    const [_, num, year, month] = match;
+    const d = new Date(parseInt(year), parseInt(month) - 1, 1);
+    const monthName = d.toLocaleString('en-US', { month: 'long' });
+    if (num === '1') {
+      return `${monthName} 1-15, ${year}`;
+    } else {
+      const lastDay = new Date(parseInt(year), parseInt(month), 0).getDate();
+      return `${monthName} 16-${lastDay}, ${year}`;
+    }
+  }
+
+  const periodOptions = [];
+  const now = new Date();
+  for (let m = 0; m < 6; m++) {
+    const d = new Date(now.getFullYear(), now.getMonth() - m, 1);
+    const year = d.getFullYear();
+    const month = d.getMonth() + 1;
+    const mm = String(month).padStart(2, '0');
+    const monthName = d.toLocaleString('en-US', { month: 'long' });
+    periodOptions.push({ value: `P1-${year}-${mm}`, label: `${monthName} 1-15, ${year}` });
+    const lastDay = new Date(year, month, 0).getDate();
+    periodOptions.push({ value: `P2-${year}-${mm}`, label: `${monthName} 16-${lastDay}, ${year}` });
   }
 
   return (
@@ -169,7 +213,7 @@ export default function Payslips({ localPhotos }) {
         </div>
         <div className="actions">
           {summary?.period && summary.period !== '-' && summary.period !== '—' && (
-          <div className="btn light period-display">{summary.period}</div>
+          <div className="btn light period-display">{formatPeriodReadable(summary.period)}</div>
           )}
           <div className="avatar" />
         </div>
@@ -178,7 +222,33 @@ export default function Payslips({ localPhotos }) {
       <div className="grid-3">
         <Metric label="Total Net Payroll" value={summary?.basePayroll ?? '0.00'} icon="💵" />
         <Metric label="Total Employees Paid" value={summary?.totalEmployees ?? '0'} icon="👥" />
-        <Metric label="Period" value={displayCellValue(summary?.period)} icon="📅" />
+        <Metric label="Period" value={formatPeriodReadable(summary?.period)} icon="📅" />
+      </div>
+
+      <div className="card">
+        <div className="card-header">
+          <div className="card-title">Payslip Processing Setup</div>
+        </div>
+        <div style={{ padding: 24, display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 24 }}>
+          <div className="form-col">
+            <label className="field-label">Pay Period</label>
+            <select className="select" value={period} onChange={(e) => setPeriod(e.target.value)}>
+              {periodOptions.map(opt => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              ))}
+            </select>
+          </div>
+          <div className="form-col" style={{ opacity: 0.5 }}>
+            <label className="field-label">Department</label>
+            <select className="select" disabled>
+              <option>All Departments</option>
+            </select>
+          </div>
+          <div className="form-col" style={{ opacity: 0.5 }}>
+            <label className="field-label">Processing Date</label>
+            <input className="input" type="date" disabled value={new Date().toISOString().split('T')[0]} />
+          </div>
+        </div>
       </div>
 
       <div className="card">
@@ -262,7 +332,7 @@ export default function Payslips({ localPhotos }) {
                   <div className="right">
                     <div className="amount">{displayCellValue(p.netPay)}</div>
                     <div className="details" style={{ marginBottom: '8px' }}>
-                      Period: {p.period || '-'} · <span className={`status-text ${String(p.status).toLowerCase()}`}>{p.status}</span>
+                      Period: {formatPeriodReadable(p.period) || '-'} · <span className={`status-text ${String(p.status).toLowerCase()}`}>{p.status}</span>
                     </div>
                     <button className="btn primary small" onClick={() => openProceed(p)}>Proceed</button>
                   </div>
@@ -280,9 +350,19 @@ export default function Payslips({ localPhotos }) {
           <div className="modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <div className="card-title">Edit Payslip · {form.name}</div>
-              <button className="modal-close-x" onClick={() => setModalOpen(false)}>✕</button>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <button 
+                  type="button" 
+                  className="btn light small" 
+                  onClick={handleGetFromPayroll}
+                  title="Pull values from this employee's payroll record for the current period"
+                >
+                  🔄 Get from Payroll
+                </button>
+                <button className="modal-close-x" onClick={() => setModalOpen(false)}>✕</button>
+              </div>
             </div>
-            <form onSubmit={confirmPayslip}>
+            <form onSubmit={(e) => handleSavePayslip(e, true)}>
               <div className="form-row">
                 <div className="form-col">
                   <label className="field-label">Gross Salary</label>
@@ -314,17 +394,35 @@ export default function Payslips({ localPhotos }) {
                   />
                 </div>
                 <div className="form-col">
-                  <label className="field-label">Pay Period Date</label>
-                  <input
-                    className="input"
-                    type="date"
+                  <label className="field-label">Pay Period</label>
+                  <select
+                    className="select"
                     value={form.period}
                     onChange={(e) => setForm({ ...form, period: e.target.value })}
-                  />
+                  >
+                    <option value="">Select Period</option>
+                    {periodOptions.map(opt => (
+                      <option key={opt.value} value={opt.value}>{opt.label}</option>
+                    ))}
+                  </select>
                 </div>
               </div>
-              <div className="modal-actions">
-                <button type="submit" className="btn primary submit-btn">Confirm & Issue</button>
+              <div className="modal-actions" style={{ display: 'flex', gap: '12px', marginTop: '24px' }}>
+                <button 
+                  type="button" 
+                  className="btn light" 
+                  style={{ flex: 1 }} 
+                  onClick={(e) => handleSavePayslip(e, false)}
+                >
+                  Save as Draft
+                </button>
+                <button 
+                  type="submit" 
+                  className="btn primary submit-btn" 
+                  style={{ flex: 1 }}
+                >
+                  Confirm & Issue
+                </button>
               </div>
             </form>
           </div>

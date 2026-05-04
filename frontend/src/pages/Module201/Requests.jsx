@@ -3,6 +3,18 @@ import './Requests.css';
 import { API_BASE } from '../../lib/api';
 import { Search, X, Filter, Trash2, Camera, Check } from 'lucide-react';
 
+function Metric({ label, value, icon }) {
+  return (
+    <div className="metric">
+      <div className="metric-content">
+        <div className="metric-label">{label}</div>
+        <div className="metric-value">{value}</div>
+      </div>
+      <div className="metric-icon">{icon}</div>
+    </div>
+  );
+}
+
 export default function Application({ localPhotos, setLocalPhotos }) {
   const [query, setQuery] = useState('');
   const [nameSort, setNameSort] = useState('none');
@@ -503,18 +515,6 @@ export default function Application({ localPhotos, setLocalPhotos }) {
           </div>
         </div>
       )}
-    </div>
-  );
-}
-
-function Metric({ label, value, icon }) {
-  return (
-    <div className="metric">
-      <div className="metric-content">
-        <div className="metric-label">{label}</div>
-        <div className="metric-value">{value}</div>
-      </div>
-      <div className="metric-icon">{icon}</div>
     </div>
   );
 }

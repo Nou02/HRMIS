@@ -169,148 +169,135 @@ module.exports = (state, db) => {
   });
 
   router.get('/', async (req, res) => {
-    const q = (req.query.q || '').toString().toLowerCase();
-    const sort = (req.query.sort || '').toString();
-    const statusFilter = (req.query.status || '').toString();
-    const date = req.query.date || getLocalDate();
-    console.log(`[Timekeeping] GET / - Date param: "${req.query.date}", Effective date: "${date}"`);
-
     try {
       await ensureTimekeepingTable();
       
-      // Use a JOIN to get all employees and their timekeeping record for the specific date in one query
-      const [rows] = await db.query(`
-        SELECT 
-          e.uid, 
-          e.name, 
-          e.avatar_url,
-          tk.clock_in, 
-          tk.clock_out, 
-          tk.total_time_minutes, 
-          tk.total_late_minutes, 
-          tk.total_overtime_minutes, 
-          tk.status,
-          tk.date as record_date
-        FROM employees e
-        LEFT JOIN timekeeping_records tk ON e.id = tk.employee_id AND tk.date = ?
-      `, [date]);
+      // 1. Extract and sanitize parameters
+      const range = (req.query.range || 'daily').toLowerCase().trim();
+      const date = req.query.date || getLocalDate();
+      const month = req.query.month; // '01' to '12'
+      const year = req.query.year;
+      const q = (req.query.q || '').toString().toLowerCase();
+      const statusFilter = (req.query.status || '').toString();
+      const sort = (req.query.sort || '').toString();
 
-      console.log(`[Timekeeping] GET / - Found ${rows.length} rows for ${date}`);
-      if (rows.length > 0) {
-        const withRecords = rows.filter(r => r.record_date !== null);
-        console.log(`[Timekeeping] GET / - ${withRecords.length} employees have records for ${date}`);
+      console.log(`[Timekeeping] Fetching range: ${range}, date: ${date}, month: ${month}, year: ${year}`);
+
+      let query = '';
+      let params = [];
+
+      // 2. Select query based on range
+      if (range === 'monthly' && month && year) {
+        // Monthly View: Show actual logs for the selected month/year
+        const startOfMonth = `${year}-${String(month).padStart(2, '0')}-01`;
+        query = `
+          SELECT e.uid, e.name, e.avatar_url, tk.clock_in, tk.clock_out, 
+                 tk.total_time_minutes, tk.total_late_minutes, tk.total_overtime_minutes, 
+                 tk.status, tk.date as record_date
+          FROM timekeeping_records tk
+          INNER JOIN employees e ON tk.employee_id = e.id
+          WHERE tk.date BETWEEN ? AND LAST_DAY(?)
+          ORDER BY tk.date ASC, e.name ASC
+        `;
+        params = [startOfMonth, startOfMonth];
+      } 
+      else if (range === 'yearly' && year) {
+        // Yearly View: Show actual logs for the selected year
+        const startOfYear = `${year}-01-01`;
+        const endOfYear = `${year}-12-31`;
+        query = `
+          SELECT e.uid, e.name, e.avatar_url, tk.clock_in, tk.clock_out, 
+                 tk.total_time_minutes, tk.total_late_minutes, tk.total_overtime_minutes, 
+                 tk.status, tk.date as record_date
+          FROM timekeeping_records tk
+          INNER JOIN employees e ON tk.employee_id = e.id
+          WHERE tk.date BETWEEN ? AND ?
+          ORDER BY tk.date ASC, e.name ASC
+        `;
+        params = [startOfYear, endOfYear];
+      } 
+      else if (range === 'weekly') {
+        // Weekly View: Show actual logs for the past 7 days from the selected date
+        query = `
+          SELECT e.uid, e.name, e.avatar_url, tk.clock_in, tk.clock_out, 
+                 tk.total_time_minutes, tk.total_late_minutes, tk.total_overtime_minutes, 
+                 tk.status, tk.date as record_date
+          FROM timekeeping_records tk
+          INNER JOIN employees e ON tk.employee_id = e.id
+          WHERE tk.date BETWEEN DATE_SUB(?, INTERVAL 7 DAY) AND ?
+          ORDER BY tk.date ASC, e.name ASC
+        `;
+        params = [date, date];
+      } 
+      else {
+        // Daily View (Default): Show EVERY employee, joined with their log for that day if it exists
+        query = `
+          SELECT e.uid, e.name, e.avatar_url, tk.clock_in, tk.clock_out, 
+                 tk.total_time_minutes, tk.total_late_minutes, tk.total_overtime_minutes, 
+                 tk.status, tk.date as record_date
+          FROM employees e
+          LEFT JOIN timekeeping_records tk ON e.id = tk.employee_id AND tk.date = ?
+          ORDER BY e.name ASC
+        `;
+        params = [date];
       }
 
-      const list = rows.map(r => {
-        // Ensure clockIn/clockOut are handled correctly whether they are strings or something else
-        const formatTime = (t) => {
-          if (!t) return '-';
-          const s = t.toString();
-          return s.includes(':') ? s.slice(0, 5) : s;
-        };
-
-        // Improved date formatting to avoid timezone shifts
-        let recordDate = date;
-        if (r.record_date) {
-          // If it's a Date object, format it correctly as YYYY-MM-DD
-          if (r.record_date instanceof Date) {
-            const year = r.record_date.getFullYear();
-            const month = String(r.record_date.getMonth() + 1).padStart(2, '0');
-            const day = String(r.record_date.getDate()).padStart(2, '0');
-            recordDate = `${year}-${month}-${day}`;
-          } else {
-            recordDate = String(r.record_date).split('T')[0];
-          }
+      const [rows] = await db.query(query, params);
+      
+      // 3. Map database results to frontend format
+      const results = rows.map(r => {
+        const hasLog = r.record_date !== null;
+        let formattedDate = '';
+        
+        if (hasLog) {
+          // Force date to YYYY-MM-DD string without timezone interference
+          const d = new Date(r.record_date);
+          const y = d.getFullYear();
+          const m = String(d.getMonth() + 1).padStart(2, '0');
+          const day = String(d.getDate()).padStart(2, '0');
+          formattedDate = `${y}-${m}-${day}`;
+        } else {
+          // If no log (absent in daily view), use the requested date
+          formattedDate = date;
         }
+
+        const formatTime = (t) => t ? String(t).slice(0, 5) : '-';
 
         return {
           uid: r.uid,
           name: r.name,
           avatarUrl: r.avatar_url,
-          clockIn: r.record_date ? formatTime(r.clock_in) : '-',
-          clockOut: r.record_date ? formatTime(r.clock_out) : '-',
-          totalTime: r.record_date ? formatHM(r.total_time_minutes || 0) : '-',
-          totalLate: r.record_date && r.total_late_minutes ? `${r.total_late_minutes}m` : '-',
-          totalOvertime: r.record_date ? formatHM(r.total_overtime_minutes || 0) : '-',
-          status: r.status || 'Absent',
-          date: recordDate
+          clockIn: hasLog ? formatTime(r.clock_in) : '-',
+          clockOut: hasLog ? formatTime(r.clock_out) : '-',
+          totalTime: hasLog ? formatHM(r.total_time_minutes) : '-',
+          totalLate: hasLog && r.total_late_minutes ? `${r.total_late_minutes}m` : '-',
+          totalOvertime: hasLog ? formatHM(r.total_overtime_minutes) : '-',
+          status: hasLog ? (r.status || 'Present') : 'Absent',
+          date: formattedDate
         };
       });
 
-      let filteredList = list;
-      if (statusFilter && statusFilter !== 'All') {
-        filteredList = filteredList.filter((r) => (r.status || '') === statusFilter);
-      }
+      // 4. Apply client-side filters (Search and Status)
+      let filtered = results;
       if (q) {
-        filteredList = filteredList.filter(
-          (r) =>
-            (r.uid || '').toLowerCase().includes(q) ||
-            (r.name || '').toLowerCase().includes(q)
+        filtered = filtered.filter(r => 
+          (r.uid || '').toLowerCase().includes(q) || 
+          (r.name || '').toLowerCase().includes(q)
         );
       }
+      if (statusFilter && statusFilter !== 'All') {
+        filtered = filtered.filter(r => r.status === statusFilter);
+      }
       if (sort === 'name_asc') {
-        filteredList.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+        filtered.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
       }
-      res.json(filteredList);
-    } catch (_e) {
-      console.error('Error fetching timekeeping records:', _e);
-      // Fallback to in-memory records if DB query fails
-      const date = req.query.date || getLocalDate();
-      
-      try {
-        // Even if the main query fails, try to at least get the employee list
-        // to use as a base for the fallback display
-        const [empRows] = await db.query('SELECT uid, name, avatar_url FROM employees');
-        const list = empRows.map(e => {
-          const record = timekeepingRecords.find(r => r.uid === e.uid && r.date === date);
-          if (record) return record;
-          return {
-            uid: e.uid,
-            name: e.name,
-            avatarUrl: e.avatar_url,
-            clockIn: '-',
-            clockOut: '-',
-            totalTime: '-',
-            totalLate: '-',
-            totalOvertime: '-',
-            status: 'Absent',
-            date: date
-          };
-        });
 
-        let filteredList = list;
-        if (statusFilter && statusFilter !== 'All') {
-          filteredList = filteredList.filter((r) => (r.status || '') === statusFilter);
-        }
-        if (q) {
-          filteredList = filteredList.filter(
-            (r) =>
-              (r.uid || '').toLowerCase().includes(q) ||
-              (r.name || '').toLowerCase().includes(q)
-          );
-        }
-        if (sort === 'name_asc') {
-          filteredList.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
-        }
-        return res.json(filteredList);
-      } catch (innerErr) {
-        // If even getting employees fails, just return whatever we have in memory for that date
-        let list = timekeepingRecords.filter((r) => r.date === date);
-        if (statusFilter && statusFilter !== 'All') {
-          list = list.filter((r) => (r.status || '') === statusFilter);
-        }
-        if (q) {
-          list = list.filter(
-            (r) =>
-              (r.uid || '').toLowerCase().includes(q) ||
-              (r.name || '').toLowerCase().includes(q)
-          );
-        }
-        if (sort === 'name_asc') {
-          list.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
-        }
-        res.json(list);
-      }
+      res.json(filtered);
+
+    } catch (err) {
+      console.error('[Timekeeping] API Error:', err);
+      res.status(500).json({ error: 'Internal Server Error', details: err.message });
+    
     }
   });
 
