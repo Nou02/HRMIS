@@ -1,7 +1,85 @@
 const express = require('express');
+const ExcelJS = require('exceljs');
+const path = require('path');
+const fs = require('fs');
 
 module.exports = (state, db) => {
   const router = express.Router();
+
+  router.get('/export-xlsx', async (req, res) => {
+    const { uid, period } = req.query;
+    console.log(`[Payslip Export] Request for UID: ${uid}, Period: ${period}`);
+
+    if (!uid || !period) {
+      return res.status(400).json({ error: 'UID and Period are required' });
+    }
+
+    try {
+      const templatePath = path.join(__dirname, '../../uploads/pay slip.xlsx');
+      if (!fs.existsSync(templatePath)) {
+        console.error(`[Payslip Export] Template not found at: ${templatePath}`);
+        return res.status(404).json({ error: 'Template file pay slip.xlsx not found in uploads folder' });
+      }
+
+      // Fetch employee and payslip data
+      const [rows] = await db.query(`
+        SELECT 
+          e.name, e.uid, e.employment_category, e.id as emp_internal_id,
+          ps.gross, ps.bonus, ps.deductions, ps.net_pay, ps.period
+        FROM employees e
+        LEFT JOIN payslips ps ON e.id = ps.employee_id AND ps.period LIKE ?
+        WHERE e.uid = ?
+      `, [`%${period}%`, uid]);
+
+      if (rows.length === 0) {
+        return res.status(404).json({ error: 'Employee or Payslip record not found' });
+      }
+
+      const r = rows[0];
+      const workbook = new ExcelJS.Workbook();
+      await workbook.xlsx.readFile(templatePath);
+      const worksheet = workbook.getWorksheet(1);
+
+      // Mapping based on "pay slip.xlsx" screenshot
+      // Header Info
+      worksheet.getCell('C3').value = period; // <MONTH/YEAR>
+      worksheet.getCell('B5').value = r.name; // EMPLOYEE NAME
+      worksheet.getCell('B6').value = r.uid;  // ID NUMBER
+      worksheet.getCell('B7').value = r.employment_category; // POSITION
+
+      // Earnings
+      const grossNum = parseFloat(r.gross || 0);
+      const basicSalary = grossNum / 2;
+      const premium = r.employment_category !== 'Job Order' ? (grossNum * 0.2) / 2 : 0;
+      
+      worksheet.getCell('A10').value = basicSalary; // Basic Salary
+      worksheet.getCell('A14').value = premium;     // 20% Premium
+      worksheet.getCell('A21').value = basicSalary + premium + parseFloat(r.bonus || 0); // GROSS PAY
+
+      // Deductions
+      worksheet.getCell('C12').value = parseFloat(r.deductions || 0); // GTECMPC Loan (placeholder for general deductions)
+      worksheet.getCell('C19').value = parseFloat(r.deductions || 0); // Total Tax Deduction (placeholder)
+      worksheet.getCell('C21').value = parseFloat(r.net_pay || 0);    // NET PAY
+
+      // Formatting
+      const currencyCells = ['A10', 'A14', 'A21', 'C12', 'C19', 'C21'];
+      currencyCells.forEach(cellAddr => {
+        const cell = worksheet.getCell(cellAddr);
+        cell.numFmt = '#,##0.00';
+        cell.alignment = { horizontal: 'right', vertical: 'middle' };
+      });
+
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      res.setHeader('Content-Disposition', `attachment; filename="Payslip_${r.name.replace(/\s+/g, '_')}_${period}.xlsx"`);
+
+      await workbook.xlsx.write(res);
+      res.end();
+      console.log(`[Payslip Export] Export successful for ${r.name}`);
+    } catch (err) {
+      console.error('[Payslip Export] Error:', err);
+      res.status(500).json({ error: 'Failed to export payslip', details: err.message });
+    }
+  });
 
   async function ensurePayslipTable() {
     try {

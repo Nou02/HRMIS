@@ -222,10 +222,18 @@ export default function ReportsCompensation({ localPhotos }) {
 
   const downloadExcel = () => {
     if (view === 'payroll' && selectedDept) {
-      // Use the new template-based Excel export for department payroll
+      // Use the template-based Excel export for department payroll
       const url = `${API_BASE}/api/payroll/export-xlsx?period=${encodeURIComponent(period)}&department=${encodeURIComponent(selectedDept)}`;
       window.open(url, '_blank');
       return;
+    }
+
+    if (view === 'payslips') {
+      // For payslips report, if multiple are in view, we could offer a bulk download 
+      // but for now, the user usually wants the template-based export per employee.
+      // If the user clicks the GLOBAL Export button while in Payslips view, 
+      // we'll offer a message or use the generic export.
+      alert("To use the 'pay slip.xlsx' template, please use the download icon next to each employee in the table.");
     }
 
     const isPayroll = view === 'payroll';
@@ -573,6 +581,7 @@ export default function ReportsCompensation({ localPhotos }) {
               <div className="text-center">Net Pay</div>
               <div className="text-center">Period</div>
               <div className="text-center">Status</div>
+              <div className="text-center">Action</div>
             </div>
             {payslips.length > 0 ? (
               payslips.map((p, idx) => (
@@ -605,6 +614,15 @@ export default function ReportsCompensation({ localPhotos }) {
                     <span className={`status ${p.statusClass || 'draft'}`}>
                       {p.status}
                     </span>
+                  </div>
+                  <div className="text-center">
+                    <button 
+                      className="btn light small"
+                      onClick={() => window.open(`${API_BASE}/api/payslips/export-xlsx?uid=${p.uid}&period=${p.period}`, '_blank')}
+                      title="Export to Excel Template"
+                    >
+                      <FileDown size={14} />
+                    </button>
                   </div>
                 </div>
               ))
