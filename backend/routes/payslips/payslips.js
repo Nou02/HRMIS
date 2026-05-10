@@ -2,6 +2,7 @@ const express = require('express');
 const ExcelJS = require('exceljs');
 const path = require('path');
 const fs = require('fs');
+const PAYSLIP_TEMPLATE_PATH = path.resolve(__dirname, '..', '..', 'uploads', 'pay slip.xlsx');
 
 module.exports = (state, db) => {
   const router = express.Router();
@@ -15,7 +16,7 @@ module.exports = (state, db) => {
     }
 
     try {
-      const templatePath = path.join(__dirname, '../../uploads/pay slip.xlsx');
+      const templatePath = PAYSLIP_TEMPLATE_PATH;
       if (!fs.existsSync(templatePath)) {
         console.error(`[Payslip Export] Template not found at: ${templatePath}`);
         return res.status(404).json({ error: 'Template file pay slip.xlsx not found in uploads folder' });
@@ -40,29 +41,32 @@ module.exports = (state, db) => {
       await workbook.xlsx.readFile(templatePath);
       const worksheet = workbook.getWorksheet(1);
 
-      // Mapping based on "pay slip.xlsx" screenshot
-      // Header Info
+      // Keep the template labels intact and populate only value cells.
       worksheet.getCell('C3').value = period; // <MONTH/YEAR>
-      worksheet.getCell('B5').value = r.name; // EMPLOYEE NAME
-      worksheet.getCell('B6').value = r.uid;  // ID NUMBER
-      worksheet.getCell('B7').value = r.employment_category; // POSITION
+      worksheet.getCell('B5').value = r.name || ''; // EMPLOYEE NAME
+      worksheet.getCell('B6').value = r.uid || '';  // ID NUMBER
+      worksheet.getCell('B7').value = r.employment_category || ''; // POSITION
 
-      // Earnings
-      const grossNum = parseFloat(r.gross || 0);
+      // Earnings values (template formulas use A11 + A15 for gross pay)
+      const grossNum = Number(r.gross || 0);
+      const bonus = Number(r.bonus || 0);
+      const deductions = Number(r.deductions || 0);
       const basicSalary = grossNum / 2;
       const premium = r.employment_category !== 'Job Order' ? (grossNum * 0.2) / 2 : 0;
-      
-      worksheet.getCell('A10').value = basicSalary; // Basic Salary
-      worksheet.getCell('A14').value = premium;     // 20% Premium
-      worksheet.getCell('A21').value = basicSalary + premium + parseFloat(r.bonus || 0); // GROSS PAY
+      const netBeforeTax = basicSalary + premium + bonus;
+      const netPay = Number(r.net_pay || 0);
 
-      // Deductions
-      worksheet.getCell('C12').value = parseFloat(r.deductions || 0); // GTECMPC Loan (placeholder for general deductions)
-      worksheet.getCell('C19').value = parseFloat(r.deductions || 0); // Total Tax Deduction (placeholder)
-      worksheet.getCell('C21').value = parseFloat(r.net_pay || 0);    // NET PAY
+      worksheet.getCell('A11').value = basicSalary;  // Basic Salary amount
+      worksheet.getCell('A15').value = premium + bonus; // Premium + bonus before gross total
+      worksheet.getCell('C14').value = netBeforeTax; // Net Before Tax
+
+      // Deductions values
+      worksheet.getCell('C12').value = deductions; // GTECMPC Loan / general deductions
+      worksheet.getCell('C19').value = deductions; // Total Tax Deduction
+      worksheet.getCell('C21').value = netPay;     // NET PAY
 
       // Formatting
-      const currencyCells = ['A10', 'A14', 'A21', 'C12', 'C19', 'C21'];
+      const currencyCells = ['A11', 'A15', 'C12', 'C14', 'C19', 'C21'];
       currencyCells.forEach(cellAddr => {
         const cell = worksheet.getCell(cellAddr);
         cell.numFmt = '#,##0.00';
