@@ -49,9 +49,34 @@ module.exports = (state, db) => {
 
       console.log(`[Payroll Export] Found ${rows.length} employees for export`);
 
+      // Fetch signatories
+      const [signatoryRows] = await db.query(`
+        SELECT r.role_name, n.name 
+        FROM signatory_roles r
+        JOIN signatory_names n ON r.current_name_id = n.id
+      `);
+      const signatories = {};
+      signatoryRows.forEach(s => {
+        signatories[s.role_name] = s.name;
+      });
+
+      // Place signatories in the correct cells
+       if (signatories['Administrative Officer II']) {
+         worksheet.getCell('C29').value = signatories['Administrative Officer II'];
+       }
+       if (signatories['Officer-in-Charge, Region IV-A']) {
+         worksheet.getCell('M29').value = signatories['Officer-in-Charge, Region IV-A'];
+       }
+       if (signatories['OIC- Accountant']) {
+         worksheet.getCell('C36').value = signatories['OIC- Accountant'];
+       }
+       if (signatories['Cashier II']) {
+         worksheet.getCell('M36').value = signatories['Cashier II'];
+       }
+
       // Get global hourly rate for OT if needed
       const [rateRows] = await db.query('SELECT hourly_rate FROM overtime_settings WHERE id = 1');
-      const globalHourlyRate = parseFloat(rateRows[0]?.hourly_rate || 200);
+      const globalHourlyRate = parseFloat(rateRows[0]?.hourly_rate || 0);
 
       for (let i = 0; i < rows.length; i++) {
         const r = rows[i];
@@ -82,21 +107,31 @@ module.exports = (state, db) => {
         }
 
         const gross = basicPay + premium + otAmount;
-        const netPay = gross - deduction;
+        const tax2 = gross * 0.02;
+        const tax3 = gross * 0.03;
+        const taxWithheld = tax2 + tax3; // Column P
+        const gtecmpc = parseFloat(r.deduction || 0); // Column Q
+        // Total Deductions = sum of Column N (tax2), O (tax3), P (taxWithheld), and Q (gtecmpc)
+        const totalDeductions = tax2 + tax3 + taxWithheld + gtecmpc; 
+        const netPay = gross - totalDeductions;
 
         // Fill cells
-         const cells = [
-           { key: 'B', value: i + 1 }, // Serial No.
-           { key: 'C', value: r.name }, // Name
-           { key: 'D', value: r.employment_category }, // Position (Category)
-           { key: 'E', value: r.uid },  // Employee No.
-           { key: 'F', value: basicPay }, // Basic Pay
-           { key: 'G', value: premium },  // 20% Premium
-           { key: 'H', value: base },     // Monthly Salary
-           { key: 'M', value: gross },    // Gross Amount
-           { key: 'R', value: deduction }, // Total Deductions
-           { key: 'S', value: netPay },    // Net Amount Due
-         ];
+        const cells = [
+          { key: 'B', value: i + 1 }, // Serial No.
+          { key: 'C', value: r.name }, // Name
+          { key: 'D', value: r.employment_category }, // Position (Category)
+          { key: 'E', value: r.uid },  // Employee No.
+          { key: 'F', value: basicPay }, // Basic Pay
+          { key: 'G', value: premium },  // 20% Premium
+          { key: 'H', value: base },     // Monthly Salary
+          { key: 'M', value: gross },    // Gross Amount
+          { key: 'N', value: tax2 },     // Tax 2%
+          { key: 'O', value: tax3 },     // Tax 3%
+          { key: 'P', value: taxWithheld }, // TAX WITHHELD (N + O)
+          { key: 'Q', value: gtecmpc },    // GTECMPC
+          { key: 'R', value: totalDeductions }, // Total Deductions (N + O + P + Q)
+          { key: 'S', value: netPay },    // Net Amount Due
+        ];
 
          cells.forEach(cell => {
            const targetCell = worksheet.getCell(`${cell.key}${rowIndex}`);
@@ -106,7 +141,7 @@ module.exports = (state, db) => {
            targetCell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
            
            // Apply number format to currency cells
-           if (['F', 'G', 'H', 'M', 'R', 'S'].includes(cell.key)) {
+           if (['F', 'G', 'H', 'M', 'N', 'O', 'P', 'Q', 'R', 'S'].includes(cell.key)) {
              targetCell.numFmt = '#,##0.00';
            }
            
@@ -163,11 +198,15 @@ module.exports = (state, db) => {
         )
       `);
       
-      // Seed default rate if missing
-      const [rows] = await db.query('SELECT id FROM overtime_settings WHERE id = 1');
+      // Seed default rate if missing or force to 0 if it's not already 0
+      const [rows] = await db.query('SELECT id, hourly_rate FROM overtime_settings WHERE id = 1');
       if (rows.length === 0) {
-        await db.query('INSERT INTO overtime_settings (id, hourly_rate) VALUES (1, 200.00)');
-        console.log('DEBUG: Created default overtime settings (₱200/hr)');
+        await db.query('INSERT INTO overtime_settings (id, hourly_rate) VALUES (1, 0.00)');
+        console.log('DEBUG: Created default overtime settings (₱0/hr)');
+      } else if (parseFloat(rows[0].hourly_rate) !== 0) {
+        await db.query('UPDATE overtime_settings SET hourly_rate = 0.00 WHERE id = 1');
+        await db.query('UPDATE payroll_records SET overtime_amount = 0.00 WHERE overtime_amount != 0');
+        console.log('DEBUG: Forced all overtime rates to 0.00');
       }
 
       // Create overtime_entries (required for summary calculations)
@@ -260,16 +299,25 @@ module.exports = (state, db) => {
       if (activePeriod) {
         const periodInfo = parsePeriod(activePeriod);
         if (periodInfo) {
-          // Get all employees and their payroll records for the ACTIVE period only
-          const [employees] = await db.query(`
+          // Get filtered employees and their payroll records for the ACTIVE period
+          let employeesQuery = `
             SELECT e.id, e.uid, e.employment_category, p.base_salary, p.overtime_amount, p.deduction, p.status
             FROM employees e
             LEFT JOIN payroll_records p ON e.id = p.employee_id AND p.period LIKE ?
-          `, [activePeriod]);
+          `;
+          
+          const summaryParams = [activePeriod ? `%${activePeriod}%` : '%'];
+          
+          if (whereClauses.length > 0) {
+            employeesQuery += ` WHERE ` + whereClauses.join(' AND ');
+            summaryParams.push(...params);
+          }
+
+          const [employees] = await db.query(employeesQuery, summaryParams);
 
           // Get hourly rate
           const [rateRows] = await db.query('SELECT hourly_rate FROM overtime_settings WHERE id = 1');
-          const globalHourlyRate = parseFloat(rateRows[0]?.hourly_rate || 200);
+          const globalHourlyRate = parseFloat(rateRows[0]?.hourly_rate || 0);
 
           // Get live OT hours
           const [otEntries] = await db.query(
@@ -346,6 +394,7 @@ module.exports = (state, db) => {
     const onlyGenerated = String(req.query.only_generated || '').toLowerCase() === 'true';
 
     try {
+      const activePeriod = period || '';
       const params = [];
       const whereClauses = [];
 
@@ -360,69 +409,16 @@ module.exports = (state, db) => {
         params.push(department);
       }
 
-      // If we have a period filter, we only want to see records for that period.
-      // However, we want to see ALL employees.
-      // So we move period filtering to the JOIN or handle NULLs.
-      
       let query = `
         SELECT 
+          e.id AS internalId,
           e.uid AS employeeId, 
           e.name AS employeeName, 
-          e.avatar_url AS avatarUrl,
+          e.avatar_url AS avatarUrl, 
           e.employment_category AS employmentCategory,
-          e.department_project AS departmentProject,
-          p.base_salary AS baseSalary,
-          p.overtime_amount AS overtime,
-          p.deduction AS deduction,
-          p.net_pay AS netPay,
-          p.status AS status,
-          p.period AS period
+          e.department_project AS departmentProject
         FROM employees e
-        LEFT JOIN (
-          SELECT p1.*
-          FROM payroll_records p1
-          INNER JOIN (
-            SELECT employee_id, MAX(id) as max_id
-            FROM payroll_records
-            GROUP BY employee_id
-          ) p2 ON p1.id = p2.max_id
-        ) p ON e.id = p.employee_id
       `;
-
-      if (period) {
-        const periodPattern = period.includes('%') ? period : `%${period}%`;
-        // Move period to the JOIN for records to avoid duplicates and show everyone
-        query = `
-          SELECT 
-            e.uid AS employeeId, 
-            e.name AS employeeName, 
-            e.avatar_url AS avatarUrl, 
-            e.employment_category AS employmentCategory,
-            e.department_project AS departmentProject,
-            p.base_salary AS baseSalary,
-            p.overtime_amount AS overtime,
-            p.deduction AS deduction,
-            p.net_pay AS netPay,
-            p.status AS status,
-            p.period AS period
-          FROM employees e
-          LEFT JOIN payroll_records p ON e.id = p.employee_id AND p.period LIKE ?
-        `;
-        params.unshift(periodPattern); // Add period as first param
-      }
-
-      if (statusVal && statusVal !== 'All') {
-        if (statusVal === 'Draft') {
-          whereClauses.push(`(p.status = 'Draft' OR p.status IS NULL)`);
-        } else {
-          whereClauses.push(`p.status = ?`);
-          params.push(statusVal);
-        }
-      }
-
-      if (onlyGenerated) {
-        whereClauses.push(`p.status = 'Generated'`);
-      }
 
       if (whereClauses.length > 0) {
         query += ` WHERE ` + whereClauses.join(' AND ');
@@ -434,17 +430,59 @@ module.exports = (state, db) => {
         query += ` ORDER BY e.id DESC`;
       }
 
-      const [rows] = await db.query(query, params);
+      const [employees] = await db.query(query, params);
 
-      // If period is provided, fetch on-the-fly overtime calculations for preview
+      // Fetch payroll records for this period
+      const [payrollRows] = await db.query(
+        `SELECT * FROM payroll_records WHERE period LIKE ?`,
+        [activePeriod ? `%${activePeriod}%` : '%']
+      );
+      const payrollMap = {};
+      payrollRows.forEach(p => {
+        payrollMap[p.employee_id] = p;
+      });
+
+      // Filter by status if needed
+      let filteredEmployees = employees;
+      if (statusVal && statusVal !== 'All') {
+        filteredEmployees = employees.filter(e => {
+          const p = payrollMap[e.internalId];
+          const s = p ? p.status : 'Draft';
+          if (statusVal === 'Draft') return s === 'Draft' || !p;
+          return s === statusVal;
+        });
+      }
+
+      if (onlyGenerated) {
+        filteredEmployees = filteredEmployees.filter(e => {
+          const p = payrollMap[e.internalId];
+          return p && p.status === 'Generated';
+        });
+      }
+
+      // Fetch historical fallbacks
+      let historicalFallbacks = {};
+      if (activePeriod) {
+        const [fallbackRows] = await db.query(`
+          SELECT p1.employee_id, p1.base_salary, p1.overtime_amount, p1.overtime_hours, p1.deduction
+          FROM payroll_records p1
+          INNER JOIN (
+            SELECT employee_id, MAX(id) as max_id
+            FROM payroll_records
+            WHERE period NOT LIKE ? AND (base_salary > 0 OR overtime_amount > 0 OR deduction > 0)
+            GROUP BY employee_id
+          ) p2 ON p1.id = p2.max_id
+        `, [activePeriod ? `%${activePeriod}%` : '']);
+        fallbackRows.forEach(f => {
+          historicalFallbacks[f.employee_id] = f;
+        });
+      }
+
+      // Fetch live overtime
       let estimatedOT = {};
-      if (period) {
-        const periodInfo = parsePeriod(period);
+      if (activePeriod) {
+        const periodInfo = parsePeriod(activePeriod);
         if (periodInfo) {
-          const [rateRows] = await db.query('SELECT hourly_rate FROM overtime_settings WHERE id = 1');
-          const hourlyRate = parseFloat(rateRows[0]?.hourly_rate || 200);
-
-          // Get manual OT entries for the period
           const [otEntries] = await db.query(
             `SELECT employee_id, SUM(hours) as totalHours 
              FROM overtime_entries 
@@ -452,8 +490,6 @@ module.exports = (state, db) => {
              GROUP BY employee_id`,
             [periodInfo.startDate, periodInfo.endDate]
           );
-
-          // Get timekeeping OT for the period
           const [tkEntries] = await db.query(
             `SELECT employee_id, SUM(total_overtime_minutes) as totalMinutes 
              FROM timekeeping_records 
@@ -463,75 +499,69 @@ module.exports = (state, db) => {
           );
 
           otEntries.forEach(row => {
-            const empId = row.employee_id;
-            estimatedOT[empId] = (estimatedOT[empId] || 0) + parseFloat(row.totalHours || 0);
+            estimatedOT[row.employee_id] = (estimatedOT[row.employee_id] || 0) + parseFloat(row.totalHours || 0);
           });
           tkEntries.forEach(row => {
-            const empId = row.employee_id;
-            estimatedOT[empId] = (estimatedOT[empId] || 0) + (parseFloat(row.totalMinutes || 0) / 60);
+            estimatedOT[row.employee_id] = (estimatedOT[row.employee_id] || 0) + (parseFloat(row.totalMinutes || 0) / 60);
           });
-
-          // Store hours instead of multiplying by global rate yet
-          // (We will use per-employee rate if available)
         }
       }
 
-      // Get internal numeric IDs for employees to match with OT data
-      const [empIdMapRows] = await db.query('SELECT id, uid FROM employees');
-      const uidToId = {};
-      empIdMapRows.forEach(e => {
-        uidToId[e.uid] = e.id;
-      });
-
       const [globalRateRows] = await db.query('SELECT hourly_rate FROM overtime_settings WHERE id = 1');
-      const globalHourlyRate = parseFloat(globalRateRows[0]?.hourly_rate || 200);
+      const globalHourlyRate = parseFloat(globalRateRows[0]?.hourly_rate || 0);
 
-      const list = rows.map(r => {
-        const internalId = uidToId[r.employeeId];
-        const liveOTHours = estimatedOT[internalId] || 0;
+      const list = filteredEmployees.map(e => {
+        const empId = e.internalId;
+        const r = payrollMap[empId] || {};
+        const liveOTHours = estimatedOT[empId] || 0;
+        const fallback = historicalFallbacks[empId] || {};
         
-        // Determine status
-        const isPreview = (r.status === null);
-        const status = r.status || (isPreview ? 'Preview' : 'Draft');
-        
-        // Use database values or 0 for preview (removed automatic fallback)
-        let baseSalaryNum = parseFloat(r.baseSalary || 0);
-        let deductionNum = parseFloat(r.deduction || 0);
-        let overtimeRate = parseFloat(r.overtime || 0);
-        
-        // If overtimeRate is still 0, use global fallback for OT rate only
-        if (overtimeRate === 0) overtimeRate = globalHourlyRate;
+        const isTruePreview = !r.id;
+        const status = r.status || (isTruePreview ? 'Preview' : 'Draft');
 
-        // Calculate OT Amount: Rate * Hours
-        const calculatedOTAmount = overtimeRate * liveOTHours;
+        let baseSalaryNum = r.base_salary !== undefined && r.base_salary !== null ? parseFloat(r.base_salary) : 0;
+        if (isTruePreview && baseSalaryNum === 0) baseSalaryNum = parseFloat(fallback.base_salary || 0);
+
+        let deductionNum = r.deduction !== undefined && r.deduction !== null ? parseFloat(r.deduction) : 0;
+        if (isTruePreview && deductionNum === 0) deductionNum = parseFloat(fallback.deduction || 0);
+
+        let overtimeRate = r.overtime_amount !== undefined && r.overtime_amount !== null ? parseFloat(r.overtime_amount) : 0;
+        if (isTruePreview && overtimeRate === 0) {
+          overtimeRate = globalHourlyRate;
+        }
+
+        let actualOTHours = r.overtime_hours !== undefined && r.overtime_hours !== null ? parseFloat(r.overtime_hours) : 0;
+        if (isTruePreview && actualOTHours === 0) actualOTHours = parseFloat(fallback.overtime_hours || 0);
+        if (actualOTHours === 0 && (status === 'Preview' || status === 'Draft')) {
+          actualOTHours = liveOTHours;
+        }
         
-        // Calculate netPay: 
-        // If it's a finalized record (Generated/Updated), we use the stored netPay from DB.
-        // If it's a Preview/Draft, we calculate it live.
-        let netPayNum = parseFloat(r.netPay || 0);
-        if (status === 'Preview' || status === 'Draft') {
+        const calculatedOTAmount = overtimeRate * actualOTHours;
+        
+        let netPayNum = parseFloat(r.net_pay || 0);
+        if (netPayNum === 0 || status === 'Preview' || status === 'Draft') {
           let currentBase = baseSalaryNum;
-          if (r.employmentCategory && r.employmentCategory !== 'Job Order') {
+          if (e.employmentCategory && e.employmentCategory !== 'Job Order') {
             currentBase = currentBase * 1.2;
           }
           netPayNum = (currentBase / 2) + calculatedOTAmount - deductionNum;
         }
 
         return {
-          employeeId: r.employeeId || r.uid,
-          employeeName: r.employeeName || r.name,
-          avatarUrl: r.avatarUrl,
-          employmentCategory: r.employmentCategory || r.employment_category,
-          departmentProject: r.departmentProject || r.department_project || r.departmentproject || 'Unassigned',
-          baseSalary: baseSalaryNum ? `₱${Number(baseSalaryNum).toLocaleString()}` : '-',
-          overtime: overtimeRate ? `₱${Number(overtimeRate).toLocaleString()}` : '-',
-          overtimeHours: liveOTHours,
+          employeeId: e.employeeId,
+          employeeName: e.employeeName,
+          avatarUrl: e.avatarUrl,
+          employmentCategory: e.employmentCategory,
+          departmentProject: e.departmentProject || 'Unassigned',
+          baseSalary: baseSalaryNum.toFixed(2),
+          overtime: overtimeRate.toFixed(2),
+          overtimeHours: actualOTHours,
           overtimeAmount: calculatedOTAmount,
-          deduction: deductionNum ? `₱${Number(deductionNum).toLocaleString()}` : '-',
-          netPay: netPayNum ? `₱${Number(netPayNum).toLocaleString()}` : '-',
+          deduction: deductionNum.toFixed(2),
+          netPay: netPayNum.toFixed(2),
           status: status + (status === 'Draft' || status === 'Preview' ? ' (NEW)' : ''),
           statusClass: status.toLowerCase() === 'generated' ? 'approved' : (status.toLowerCase() === 'preview' ? 'preview' : 'draft'),
-          period: r.period || period,
+          period: r.period || activePeriod,
         };
       });
 
@@ -563,12 +593,16 @@ module.exports = (state, db) => {
       if (rows.length === 0) return res.status(404).json({ error: 'Employee not found' });
       
       const r = rows[0];
+      const dbStatus = r.status ? String(r.status) : null;
       
-      // If we found a persisted record for this period
+      // If we found a persisted record for this period in the database
       if (r.id) {
         // Calculate overtime amount if possible
         let otAmount = 0;
         const periodInfo = parsePeriod(r.period);
+        const rateToUse = parseFloat(r.overtime_amount || 0);
+        const hoursToUse = parseFloat(r.overtime_hours || 0);
+
         if (periodInfo) {
           const [otRows] = await db.query(
             `SELECT COALESCE(SUM(hours), 0) as totalHours 
@@ -582,8 +616,13 @@ module.exports = (state, db) => {
              WHERE employee_id = ? AND date >= ? AND date <= ?`,
             [r.internal_id, periodInfo.startDate, periodInfo.endDate]
           );
-          const totalHours = parseFloat(otRows[0].totalHours || 0) + (parseFloat(tkRows[0].totalOTMinutes || 0) / 60);
-          otAmount = totalHours * parseFloat(r.overtime_amount || 0);
+          
+          // Use stored hours if non-zero, otherwise live hours
+          let totalHours = hoursToUse;
+          if (totalHours === 0) {
+             totalHours = parseFloat(otRows[0].totalHours || 0) + (parseFloat(tkRows[0].totalOTMinutes || 0) / 60);
+          }
+          otAmount = totalHours * rateToUse;
         }
 
         return res.json({
@@ -591,26 +630,37 @@ module.exports = (state, db) => {
           employeeName: r.name,
           baseSalary: r.base_salary,
           overtime: r.overtime_amount,
+          overtimeHours: r.overtime_hours,
           overtimeAmount: otAmount,
           deduction: r.deduction,
           netPay: r.net_pay,
-          status: r.status,
+          status: dbStatus,
           period: r.period
         });
       }
 
-      // 2. If no persisted record, return "Preview" data with empty/zero values for new periods
-      // (Removed automatic fallback to recent salaries as per user request)
+      // 2. If no persisted record, return "Preview" data with fallback to recent values
       const internalId = r.internal_id;
-      let estimatedOTAmount = 0;
-      let baseSalaryNum = 0;
-      let deductionNum = 0;
-      let overtimeRate = 0;
-
+      
       // Get global rate for OT fallback only
       const [globalRateRows] = await db.query('SELECT hourly_rate FROM overtime_settings WHERE id = 1');
-      overtimeRate = parseFloat(globalRateRows[0]?.hourly_rate || 200);
+      const globalHourlyRate = parseFloat(globalRateRows[0]?.hourly_rate || 0);
 
+      // Fetch fallback values from most recent record NOT in current period
+      const [fallbackRows] = await db.query(
+        `SELECT base_salary, deduction, overtime_amount 
+         FROM payroll_records 
+         WHERE employee_id = ? AND period != ? 
+         ORDER BY created_at DESC LIMIT 1`,
+        [internalId, period || '']
+      );
+
+      const f = fallbackRows[0] || {};
+      let baseSalaryNum = parseFloat(f.base_salary || 0);
+      let deductionNum = parseFloat(f.deduction || 0);
+      let overtimeRate = parseFloat(f.overtime_amount || globalHourlyRate);
+
+      let estimatedOTAmount = 0;
       // Calculate live OT hours if period is provided
       if (period) {
         const periodInfo = parsePeriod(period);
@@ -663,7 +713,7 @@ module.exports = (state, db) => {
       const periodInfo = parsePeriod(period);
       
       const [rateRows] = await db.query('SELECT hourly_rate FROM overtime_settings WHERE id = 1');
-      const hourlyRate = parseFloat(rateRows[0]?.hourly_rate || 200);
+      const hourlyRate = parseFloat(rateRows[0]?.hourly_rate || 0);
 
       // Get most recent salaries to pre-fill generated records
       const [recentSalaries] = await db.query(`
@@ -706,37 +756,73 @@ module.exports = (state, db) => {
         
         // Use the rate instead of the amount for the overtime_amount column
         const rateToStore = hourlyRate;
-        const calculatedOTValue = totalHours * rateToStore;
 
-        const recent = salaryMap[emp.id] || { base: 0, ded: 0 };
-        const baseSalary = recent.base;
-        const deduction = recent.ded;
+        // Fetch the most recent base salary, deduction, and overtime rate for this employee
+        // EXCLUDING the current period to avoid self-referencing 0s
+        const [recentRecords] = await db.query(
+          `SELECT base_salary, deduction, overtime_amount 
+           FROM payroll_records 
+           WHERE employee_id = ? AND period != ? 
+           ORDER BY created_at DESC LIMIT 1`, 
+          [emp.id, period || '']
+        );
+        
+        const baseSalary = recentRecords.length > 0 ? recentRecords[0].base_salary : 0;
+        const deduction = recentRecords.length > 0 ? recentRecords[0].deduction : 0;
+        // Default to global hourly rate (which is now 0)
+        const previousRate = hourlyRate; 
+        const previousHours = recentRecords.length > 0 ? recentRecords[0].overtime_hours : 0;
 
         let currentBase = parseFloat(baseSalary || 0);
         if (emp.employment_category && emp.employment_category !== 'Job Order') {
           currentBase = currentBase * 1.2;
         }
 
+        // Use live hours if they exist, otherwise use previous period's hours
+        const finalHours = totalHours > 0 ? totalHours : previousHours;
+        const calculatedOTValue = finalHours * previousRate;
         const netPay = (currentBase / 2) + calculatedOTValue - parseFloat(deduction);
 
         const [existing] = await db.query(`SELECT id FROM payroll_records WHERE employee_id = ? AND period = ?`, [emp.id, period || '']);
         
         if (existing.length === 0) {
           await db.query(`
-            INSERT INTO payroll_records (employee_id, base_salary, overtime_amount, deduction, net_pay, status, period)
-            VALUES (?, ?, ?, ?, ?, 'Generated', ?)
-          `, [emp.id, baseSalary, rateToStore, deduction, netPay, period || '']);
+            INSERT INTO payroll_records (employee_id, base_salary, overtime_amount, overtime_hours, deduction, net_pay, status, period)
+            VALUES (?, ?, ?, ?, ?, ?, 'Generated', ?)
+          `, [emp.id, baseSalary, previousRate, finalHours, deduction, netPay, period || '']);
         } else {
+          // Update existing record: 
+          // Only RE-FILL values if they are currently 0 AND the status is NOT 'Updated'
+          // We also use a more precise check for 0 to ensure manual 0.00 is preserved
           await db.query(`
             UPDATE payroll_records 
-            SET status = 'Generated', overtime_amount = ?, net_pay = (
-              CASE 
-                WHEN ? != 'Job Order' THEN (base_salary * 1.2) / 2
-                ELSE base_salary / 2
-              END
-            ) + ? - deduction 
+            SET status = 'Generated', 
+                base_salary = CASE WHEN status != 'Updated' AND (base_salary IS NULL OR base_salary = 0) THEN ? ELSE base_salary END,
+                deduction = CASE WHEN status != 'Updated' AND (deduction IS NULL OR deduction = 0) THEN ? ELSE deduction END,
+                overtime_amount = CASE WHEN status != 'Updated' AND (overtime_amount IS NULL OR overtime_amount = 0) THEN ? ELSE overtime_amount END,
+                overtime_hours = CASE WHEN status != 'Updated' AND (overtime_hours IS NULL OR overtime_hours = 0) THEN ? ELSE overtime_hours END, 
+                net_pay = (
+                  CASE 
+                    WHEN ? != 'Job Order' THEN (CASE WHEN status != 'Updated' AND (base_salary IS NULL OR base_salary = 0) THEN ? ELSE base_salary END * 1.2) / 2
+                    ELSE (CASE WHEN status != 'Updated' AND (base_salary IS NULL OR base_salary = 0) THEN ? ELSE base_salary END) / 2
+                  END
+                ) + (
+                  CASE 
+                    WHEN status != 'Updated' AND (overtime_hours IS NULL OR overtime_hours = 0) THEN ? 
+                    ELSE overtime_hours 
+                  END * 
+                  CASE 
+                    WHEN status != 'Updated' AND (overtime_amount IS NULL OR overtime_amount = 0) THEN ? 
+                    ELSE overtime_amount 
+                  END
+                ) - (CASE WHEN status != 'Updated' AND (deduction IS NULL OR deduction = 0) THEN ? ELSE deduction END)
             WHERE employee_id = ? AND period = ?
-          `, [rateToStore, emp.employment_category, calculatedOTValue, emp.id, period || '']);
+          `, [
+            baseSalary, deduction, previousRate, finalHours,
+            emp.employment_category, baseSalary, baseSalary, 
+            finalHours, previousRate, deduction,
+            emp.id, period || ''
+          ]);
         }
       }
       
@@ -752,40 +838,51 @@ module.exports = (state, db) => {
     const {
       baseSalary,
       overtime,
+      overtimeHours,
       deduction,
       status = 'Updated',
       period,
     } = req.body || {};
 
+    console.log(`[Payroll Update] UID: ${employeeId}, Period: ${period}, Data:`, { baseSalary, overtime, overtimeHours, deduction, status });
+
     try {
       // Get numeric ID from UID
       const [empRows] = await db.query(`SELECT id, employment_category FROM employees WHERE uid = ?`, [employeeId]);
-      if (empRows.length === 0) return res.status(404).json({ error: 'Employee not found' });
+      if (empRows.length === 0) {
+        console.error(`[Payroll Update] Employee not found: ${employeeId}`);
+        return res.status(404).json({ error: 'Employee not found' });
+      }
       const empId = empRows[0].id;
       const empCategory = empRows[0].employment_category;
 
       const baseN = Number(String(baseSalary || 0).replace(/[^\d.-]/g, '')) || 0;
       const otRateN = Number(String(overtime || 0).replace(/[^\d.-]/g, '')) || 0;
+      const otHoursN = Number(String(overtimeHours || 0).replace(/[^\d.-]/g, '')) || 0;
       const dedN = Number(String(deduction || 0).replace(/[^\d.-]/g, '')) || 0;
 
-      // To calculate correct netPay, we need to know the overtime hours for this period
-      let calculatedOTAmount = 0;
-      const periodInfo = parsePeriod(period);
-      if (periodInfo) {
-        const [otRows] = await db.query(
-          `SELECT COALESCE(SUM(hours), 0) as totalHours 
-           FROM overtime_entries 
-           WHERE employee_id = ? AND date >= ? AND date <= ?`,
-          [empId, periodInfo.startDate, periodInfo.endDate]
-        );
-        const [tkRows] = await db.query(
-          `SELECT COALESCE(SUM(total_overtime_minutes), 0) as totalOTMinutes 
-           FROM timekeeping_records 
-           WHERE employee_id = ? AND date >= ? AND date <= ?`,
-          [empId, periodInfo.startDate, periodInfo.endDate]
-        );
-        const totalHours = parseFloat(otRows[0].totalHours || 0) + (parseFloat(tkRows[0].totalOTMinutes || 0) / 60);
-        calculatedOTAmount = totalHours * otRateN;
+      // Calculate overtime amount using either manual override or database total
+      let calculatedOTAmount = otRateN * otHoursN;
+      
+      // Fallback to timekeeping logic only if no manual hours provided (optional, but manual takes priority now)
+      if (!overtimeHours && overtimeHours !== 0) {
+        const periodInfo = parsePeriod(period);
+        if (periodInfo) {
+          const [otRows] = await db.query(
+            `SELECT COALESCE(SUM(hours), 0) as totalHours 
+             FROM overtime_entries 
+             WHERE employee_id = ? AND date >= ? AND date <= ?`,
+            [empId, periodInfo.startDate, periodInfo.endDate]
+          );
+          const [tkRows] = await db.query(
+            `SELECT COALESCE(SUM(total_overtime_minutes), 0) as totalOTMinutes 
+             FROM timekeeping_records 
+             WHERE employee_id = ? AND date >= ? AND date <= ?`,
+            [empId, periodInfo.startDate, periodInfo.endDate]
+          );
+          const totalHours = parseFloat(otRows[0].totalHours || 0) + (parseFloat(tkRows[0].totalOTMinutes || 0) / 60);
+          calculatedOTAmount = totalHours * otRateN;
+        }
       }
 
       let currentBase = baseN;
@@ -802,30 +899,35 @@ module.exports = (state, db) => {
       );
       
       if (existing.length === 0) {
-        await db.query(`
-          INSERT INTO payroll_records (employee_id, base_salary, overtime_amount, deduction, net_pay, status, period)
-          VALUES (?, ?, ?, ?, ?, ?, ?)
-        `, [empId, baseN, otRateN, dedN, netPay, status, period || '']);
+        console.log(`[Payroll Update] Inserting new record for ${employeeId} in period ${period}`);
+        const [result] = await db.query(`
+          INSERT INTO payroll_records (employee_id, base_salary, overtime_amount, overtime_hours, deduction, net_pay, status, period)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        `, [empId, baseN, otRateN, otHoursN, dedN, netPay, status, period || '']);
+        console.log(`[Payroll Update] Insert successful, ID: ${result.insertId}`);
       } else {
-        await db.query(`
+        console.log(`[Payroll Update] Updating existing record ${existing[0].id} for ${employeeId} in period ${period}`);
+        const [result] = await db.query(`
           UPDATE payroll_records 
-          SET base_salary = ?, overtime_amount = ?, deduction = ?, net_pay = ?, status = ?
+          SET base_salary = ?, overtime_amount = ?, overtime_hours = ?, deduction = ?, net_pay = ?, status = ?
           WHERE employee_id = ? AND period = ?
-        `, [baseN, otRateN, dedN, netPay, status, empId, period || '']);
+        `, [baseN, otRateN, otHoursN, dedN, netPay, status, empId, period || '']);
+        console.log(`[Payroll Update] Update successful, affected rows: ${result.affectedRows}`);
       }
 
       res.json({
+        ok: true,
         employeeId,
-        baseSalary: `₱${baseN.toLocaleString()}`,
-        overtime: `₱${otRateN.toLocaleString()}`,
-        deduction: `₱${dedN.toLocaleString()}`,
-        netPay: `₱${netPay.toLocaleString()}`,
+        baseSalary: baseN,
+        overtime: otRateN,
+        deduction: dedN,
+        netPay: netPay,
         status,
         period: period || '',
       });
     } catch (e) {
-      console.error('Payroll update error:', e);
-      res.status(500).json({ error: 'db_error' });
+      console.error('[Payroll Update] Error:', e);
+      res.status(500).json({ error: 'Database update failed', details: e.message });
     }
   });
 

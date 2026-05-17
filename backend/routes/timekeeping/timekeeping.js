@@ -107,6 +107,25 @@ module.exports = (state, db) => {
     return `${hours}h ${String(mins).padStart(2, '0')}m`;
   }
 
+  function isOvertimeDay(dateStr) {
+    if (!dateStr) return false;
+    // Create date in local time to avoid TZ issues
+    const [y, m, d] = dateStr.split('-').map(Number);
+    const date = new Date(y, m - 1, d);
+    const day = date.getDay(); // 0 = Sunday, 6 = Saturday
+    
+    if (day === 0 || day === 6) return true;
+
+    // Standard PH Holidays for 2026
+    const holidays = [
+      '2026-01-01', '2026-01-02', '2026-02-25', '2026-04-02', '2026-04-03', 
+      '2026-04-04', '2026-04-09', '2026-05-01', '2026-06-12', '2026-08-21', 
+      '2026-08-31', '2026-11-01', '2026-11-02', '2026-11-30', '2026-12-08', 
+      '2026-12-24', '2026-12-25', '2026-12-30', '2026-12-31'
+    ];
+    return holidays.includes(dateStr);
+  }
+
   router.get('/summary', async (req, res) => {
     try {
       await ensureTimekeepingTable();
@@ -310,17 +329,18 @@ module.exports = (state, db) => {
     console.log(`[Timekeeping] POST / - Saving record for ${uid} on ${targetDate}`);
     
     const totalMinutes = diffMinutes(clockIn, clockOut);
-    // Overtime calculation starts after 6 PM (18:00)
     let overtimeMinutes = 0;
-    if (clockOut) {
-      const [outH, outM] = clockOut.split(':').map(Number);
-      if (outH > 18 || (outH === 18 && outM > 0)) {
-        overtimeMinutes = (outH - 18) * 60 + outM;
-      }
-    }
+    if (isOvertimeDay(targetDate)) {
+      // Entire duration is overtime for weekends/holidays
+      overtimeMinutes = totalMinutes;
+    } // No overtime for regular weekdays per user request
     
-    // Late calculation starts after 8:30 AM (08:30)
-    const lateMinutes = clockIn ? Math.max(0, diffMinutes('08:30', clockIn)) : 0;
+    // Late calculation starts after 8:30 AM (08:30), but only on regular workdays
+    let lateMinutes = 0;
+    if (!isOvertimeDay(targetDate)) {
+      const diffLate = clockIn ? diffMinutes('08:30', clockIn) : 0;
+      lateMinutes = diffLate >= 61 ? diffLate - 60 : 0; // 61 min threshold, duration starts after 60 min
+    }
 
     const rec = {
       uid,
@@ -390,14 +410,17 @@ module.exports = (state, db) => {
     const idx = timekeepingRecords.findIndex((r) => r.uid === uid && r.date === targetDate);
     
     const totalMinutes = diffMinutes(clockIn, clockOut);
-    let overtimeMinutes = 0;
-    if (clockOut) {
-      const [outH, outM] = clockOut.split(':').map(Number);
-      if (outH > 18 || (outH === 18 && outM > 0)) {
-        overtimeMinutes = (outH - 18) * 60 + outM;
+      let overtimeMinutes = 0;
+      if (isOvertimeDay(targetDate)) {
+        // Entire duration is overtime for weekends/holidays
+        overtimeMinutes = totalMinutes;
+      } // No overtime for regular weekdays per user request
+      
+      let lateMinutes = 0;
+      if (!isOvertimeDay(targetDate)) {
+        const diffLate = clockIn ? diffMinutes('08:30', clockIn) : 0;
+        lateMinutes = diffLate >= 61 ? diffLate - 60 : 0; // 61 min threshold, duration starts after 60 min
       }
-    }
-    const lateMinutes = clockIn ? Math.max(0, diffMinutes('08:30', clockIn)) : 0;
 
     const rec = {
       uid,

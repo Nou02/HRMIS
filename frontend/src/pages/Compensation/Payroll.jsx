@@ -44,6 +44,7 @@ export default function GeneralPayroll({ localPhotos }) {
   const [summary, setSummary] = useState(null);
   const [editOpen, setEditOpen] = useState(false);
   const [fullImageView, setFullImageView] = useState(null);
+  const [saving, setSaving] = useState(false);
 
   const [editForm, setEditForm] = useState({
     employeeId: '',
@@ -59,21 +60,21 @@ export default function GeneralPayroll({ localPhotos }) {
   const filterRef = useRef(null);
   const searchInputRef = useRef(null);
 
-  const formatPeso = (value) => {
+  const formatPeso = (value, showZero = false) => {
     if (typeof value === 'string') {
       value = value.replace(/[^\d.-]/g, '');
     }
     const num = parseFloat(value) || 0;
-    if (num === 0) return '';
-    return `₱${num % 1 === 0
-      ? num.toLocaleString('en-PH', { minimumFractionDigits: 0 })
-      : num.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-    }`;
+    if (num === 0 && !showZero) return '';
+    return `₱${num.toLocaleString('en-PH', { 
+      minimumFractionDigits: 2, 
+      maximumFractionDigits: 2 
+    })}`;
   };
 
   const displayCellValue = (val) => {
     const s = String(val ?? '').trim();
-    if (s === '0' || s === '0.00' || s === '-' || s === '') return '';
+    if (s === '-' || s === '') return '';
     return val;
   };
 
@@ -171,7 +172,7 @@ export default function GeneralPayroll({ localPhotos }) {
     const { name, value } = e.target;
     setEditForm(prev => {
       const updated = { ...prev, [name]: value };
-      if (['baseSalary', 'overtime', 'deduction'].includes(name)) {
+      if (['baseSalary', 'overtime', 'overtimeHours', 'deduction'].includes(name)) {
         const base = parseFloat(updated.baseSalary) || 0;
         const rate = parseFloat(updated.overtime) || 0;
         const hours = parseFloat(updated.overtimeHours) || 0;
@@ -339,7 +340,8 @@ export default function GeneralPayroll({ localPhotos }) {
               <div className="text-center">UID</div>
               <div className="text-center">Name</div>
               <div className="text-center">Base Salary</div>
-              <div className="text-center">Overtime</div>
+              <div className="text-center">OT Rate/Hrs</div>
+              <div className="text-center">OT Amount</div>
               <div className="text-center">Deduction</div>
               <div className="text-center">Net Pay</div>
               <div className="text-center">Status</div>
@@ -370,9 +372,17 @@ export default function GeneralPayroll({ localPhotos }) {
                     </div>
                     <span className="employee-name-text">{row.employeeName || '-'}</span>
                   </div>
-                  <div className="text-center">{displayCellValue(row.displaySalary)}</div>
-                  <div className="text-center">{displayCellValue(row.overtime)}</div>
-                  <div className="text-center">{displayCellValue(row.deduction)}</div>
+                  <div className="text-center">{displayCellValue(formatPeso(row.displaySalary, !row.statusClass?.includes('preview')))}</div>
+                  <div className="text-center">
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                      <span style={{ fontSize: '12px', color: '#64748b' }}>{displayCellValue(formatPeso(row.overtime, !row.statusClass?.includes('preview')))}</span>
+                      <span style={{ fontWeight: 600 }}>{row.overtimeHours || 0} hrs</span>
+                    </div>
+                  </div>
+                  <div className="text-center" style={{ color: '#2ecc71', fontWeight: 600 }}>
+                    {displayCellValue(formatPeso(row.overtimeAmount, !row.statusClass?.includes('preview')))}
+                  </div>
+                  <div className="text-center">{displayCellValue(formatPeso(row.deduction, !row.statusClass?.includes('preview')))}</div>
                   <div className="text-center" style={{ fontWeight: 600 }}>
                     {formatPeso(row.netPay)}
                   </div>
@@ -383,16 +393,28 @@ export default function GeneralPayroll({ localPhotos }) {
                   </div>
                   <div className="activity-cell">
                     <button className="btn small edit-btn" onClick={() => {
+                      // Clean values for the numeric inputs
+                      const cleanBase = String(row.baseSalary || '').replace(/[^\d.-]/g, '');
+                      const cleanOT = String(row.overtime || '').replace(/[^\d.-]/g, '');
+                      const cleanDed = String(row.deduction || '').replace(/[^\d.-]/g, '');
+                      const cleanNet = String(row.netPay || '').replace(/[^\d.-]/g, '');
+
+                      // Determine initial status for the edit form
+                      let initialStatus = row.status || 'Draft';
+                      if (initialStatus.includes('Preview')) {
+                        initialStatus = 'Draft';
+                      }
+
                       setEditForm({
                         employeeId: row.employeeId || '',
                         employeeName: row.employeeName || '',
                         employmentCategory: row.employmentCategory || '',
-                        baseSalary: String(row.baseSalary || '').replace(/[^\d.-]/g, '') || '0',
-                        overtime: String(row.overtime || '').replace(/[^\d.-]/g, '') || '0',
+                        baseSalary: cleanBase || '0',
+                        overtime: cleanOT || '0',
                         overtimeHours: row.overtimeHours || 0,
-                        deduction: String(row.deduction || '').replace(/[^\d.-]/g, '') || '0',
-                        netPay: String(row.netPay || '').replace(/[^\d.-]/g, '') || '0',
-                        status: row.status || 'Draft',
+                        deduction: cleanDed || '0',
+                        netPay: cleanNet || '0',
+                        status: initialStatus,
                       });
                       setEditOpen(true);
                     }}>Edit</button>
@@ -425,14 +447,30 @@ export default function GeneralPayroll({ localPhotos }) {
             </div>
             <form onSubmit={(e) => {
               e.preventDefault();
+              setSaving(true);
               fetch(`${API_BASE}/api/payroll/records/${encodeURIComponent(editForm.employeeId)}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ ...editForm, period }),
-              }).then(() => {
-                setEditOpen(false);
-                loadRecords();
-              });
+              })
+                .then(async (res) => {
+                  if (!res.ok) {
+                    const errorData = await res.json();
+                    throw new Error(errorData.error || 'Failed to save changes');
+                  }
+                  return res.json();
+                })
+                .then(() => {
+                  setEditOpen(false);
+                  loadRecords();
+                })
+                .catch(err => {
+                  console.error('Save error:', err);
+                  alert(`Error: ${err.message}`);
+                })
+                .finally(() => {
+                  setSaving(false);
+                });
             }}>
               <div className="form-row">
                 <div className="form-col">
@@ -447,6 +485,7 @@ export default function GeneralPayroll({ localPhotos }) {
                     placeholder="Enter Name"
                     value={editForm.employeeName}
                     onChange={handleEditChange}
+                    disabled={saving}
                   />
                 </div>
               </div>
@@ -457,10 +496,12 @@ export default function GeneralPayroll({ localPhotos }) {
                   <input
                     name="baseSalary"
                     type="number"
+                    step="any"
                     className="input"
                     placeholder="e.g. 25000"
                     value={editForm.baseSalary}
                     onChange={handleEditChange}
+                    disabled={saving}
                   />
                 </div>
                 <div className="form-col">
@@ -468,10 +509,12 @@ export default function GeneralPayroll({ localPhotos }) {
                   <input
                     name="overtime"
                     type="number"
+                    step="any"
                     className="input"
-                    placeholder="e.g. 200"
+                    placeholder="e.g. 0"
                     value={editForm.overtime}
                     onChange={handleEditChange}
+                    disabled={saving}
                   />
                 </div>
               </div>
@@ -480,10 +523,14 @@ export default function GeneralPayroll({ localPhotos }) {
                 <div className="form-col">
                   <label className="field-label">Overtime Hours (Actual)</label>
                   <input
+                    name="overtimeHours"
+                    type="number"
+                    step="any"
                     className="input"
-                    style={{backgroundColor: '#f5f5f5'}}
+                    placeholder="e.g. 10"
                     value={editForm.overtimeHours}
-                    readOnly
+                    onChange={handleEditChange}
+                    disabled={saving}
                   />
                 </div>
                 <div className="form-col">
@@ -491,10 +538,12 @@ export default function GeneralPayroll({ localPhotos }) {
                   <input
                     name="deduction"
                     type="number"
+                    step="any"
                     className="input"
                     placeholder="e.g. 500"
                     value={editForm.deduction}
                     onChange={handleEditChange}
+                    disabled={saving}
                   />
                 </div>
               </div>
@@ -506,7 +555,7 @@ export default function GeneralPayroll({ localPhotos }) {
                     type="text"
                     className="input"
                     style={{fontWeight: 'bold', color: '#2ecc71'}}
-                    value={formatPeso(editForm.netPay)}
+                    value={formatPeso(editForm.netPay, true)}
                     readOnly
                   />
                 </div>
@@ -520,6 +569,7 @@ export default function GeneralPayroll({ localPhotos }) {
                     className="select"
                     value={editForm.status}
                     onChange={handleEditChange}
+                    disabled={saving}
                   >
                     <option value="Generated">Generated</option>
                     <option value="Updated">Updated</option>
@@ -529,7 +579,9 @@ export default function GeneralPayroll({ localPhotos }) {
               </div>
 
               <div className="modal-actions">
-                <button type="submit" className="btn primary submit-btn">Save Changes</button>
+                <button type="submit" className="btn primary submit-btn" disabled={saving}>
+                  {saving ? 'Saving...' : 'Save Changes'}
+                </button>
               </div>
             </form>
           </div>

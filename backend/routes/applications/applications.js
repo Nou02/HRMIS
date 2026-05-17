@@ -65,23 +65,44 @@ module.exports = (db) => {
       }
       const employeeId = empRows[0].id;
 
-      // 1. Get total overtime hours (manual entries)
+      // 1. Get daily manual overtime entries
       const [otRows] = await db.query(
-        `SELECT COALESCE(SUM(hours), 0) as totalHours 
+        `SELECT date, hours 
          FROM overtime_entries 
          WHERE employee_id = ? AND date >= ? AND date <= ?`,
         [employeeId, periodInfo.startDate, periodInfo.endDate]
       );
 
-      // 2. Get total overtime hours (timekeeping records)
+      // 2. Get daily timekeeping overtime records
       const [tkRows] = await db.query(
-        `SELECT COALESCE(SUM(total_overtime_minutes), 0) as totalOTMinutes 
+        `SELECT date, total_overtime_minutes 
          FROM timekeeping_records 
          WHERE employee_id = ? AND date >= ? AND date <= ?`,
         [employeeId, periodInfo.startDate, periodInfo.endDate]
       );
 
-      const totalOTHours = parseFloat(otRows[0].totalHours || 0) + (parseFloat(tkRows[0].totalOTMinutes || 0) / 60);
+      // Group by date to apply the 4/8 hour rule
+      const dailyOT = {};
+      otRows.forEach(row => {
+        const d = row.date instanceof Date ? row.date.toISOString().split('T')[0] : String(row.date);
+        dailyOT[d] = (dailyOT[d] || 0) + parseFloat(row.hours || 0);
+      });
+      tkRows.forEach(row => {
+        const d = row.date instanceof Date ? row.date.toISOString().split('T')[0] : String(row.date);
+        dailyOT[d] = (dailyOT[d] || 0) + (parseFloat(row.total_overtime_minutes || 0) / 60);
+      });
+
+      // Apply the rule: ONLY 4 or 8 hours count per day
+      let totalOTAvailability = 0;
+      Object.values(dailyOT).forEach(hours => {
+        if (hours >= 8) {
+          totalOTAvailability += 8;
+        } else if (hours >= 4) {
+          totalOTAvailability += 4;
+        }
+      });
+
+      const totalOTHours = totalOTAvailability;
 
       // 3. Get total used offset hours (approved only)
       const [usedRows] = await db.query(
@@ -99,7 +120,7 @@ module.exports = (db) => {
         period: periodInfo.period,
         startDate: periodInfo.startDate,
         endDate: periodInfo.endDate,
-        totalOTHours,
+        totalOTHours, // This now reflects the 4/8 availability rule
         usedHours,
         availableHours
       });
@@ -177,15 +198,9 @@ module.exports = (db) => {
     }
 
     const hours = Number(offsetHours || 0);
-    // Removed minimum 2 restriction if requested by user implicitly or if it gets in the way
-    // But keeping it for now if not explicitly asked to remove.
-    // User said "use overtime hours", so if they have 1 hour OT, they should be able to use it.
-    // I'll remove the < 2 restriction to be safe.
-    /*
-    if (offsetHours && hours < 2 && hours !== 0) {
-      return res.status(400).json({ error: 'offsetHours must be at least 2' });
+    if (hours !== 0 && hours !== 4 && hours !== 8) {
+      return res.status(400).json({ error: 'Off-set hours must be exactly 4 or 8' });
     }
-    */
 
     try {
       await ensureTimeOffRequestsTable();
@@ -244,6 +259,9 @@ module.exports = (db) => {
     console.log('PUT /api/applications body:', req.body);
 
     const hours = typeof offsetHours === 'undefined' ? null : Number(offsetHours || 0);
+    if (hours !== null && hours !== 0 && hours !== 4 && hours !== 8) {
+      return res.status(400).json({ error: 'Off-set hours must be exactly 4 or 8' });
+    }
 
     try {
       await ensureTimeOffRequestsTable();

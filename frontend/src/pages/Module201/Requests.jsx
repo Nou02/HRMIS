@@ -499,7 +499,15 @@ export default function Application({ localPhotos, setLocalPhotos }) {
               <div className="form-row">
                 <div className="form-col">
                   <label className="field-label">Off-set Hours</label>
-                  <input className="input" type="number" step="0.5" value={form.offsetHours} onChange={(e) => setForm({ ...form, offsetHours: e.target.value })} />
+                  <select 
+                    className="select" 
+                    value={form.offsetHours} 
+                    onChange={(e) => setForm({ ...form, offsetHours: e.target.value })}
+                  >
+                    <option value="0">0 hrs</option>
+                    <option value="4">4 hrs</option>
+                    <option value="8">8 hrs</option>
+                  </select>
                   {availableOffset && (
                     <div style={{ fontSize: '12px', marginTop: '4px', color: '#0ea5e9', fontWeight: '500' }}>
                       Available OT: {availableOffset.availableHours.toFixed(2)} hrs ({availableOffset.period})

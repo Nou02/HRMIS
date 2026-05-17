@@ -50,6 +50,7 @@ const timekeepingRouter = require('./routes/timekeeping/timekeeping')(state, db)
 const overtimeRouter = require('./routes/overtime/overtime')(state, db);
 const landingRouter = require('./routes/landing/landing')();
 const authRouter = require('./routes/auth/auth')(db);
+const signatoriesRouter = require('./routes/signatories/signatories')(db);
 
 app.use('/api/stats', dashboardRouter);
 app.use('/api/health', healthRouter);
@@ -62,6 +63,7 @@ app.use('/api/payslips', payslipsRouter);
 app.use('/api/timekeeping', timekeepingRouter);
 app.use('/api/overtime', overtimeRouter);
 app.use('/api/auth', authRouter);
+app.use('/api/signatories', signatoriesRouter);
 
 const PORT = process.env.PORT || 5176;
 app.listen(PORT, () => {

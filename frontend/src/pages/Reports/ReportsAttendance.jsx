@@ -24,10 +24,25 @@ const formatDurationClean = (totalMinutes) => {
   return result || '-';
 };
 
-const calculateAttendanceRaw = (clockIn, clockOut, status) => {
+const calculateAttendanceRaw = (clockIn, clockOut, status, dateStr) => {
   if (status === 'Absent' || status === 'On Leave' || !clockIn || !clockOut || clockIn === '-' || clockOut === '-') {
     return { totalMin: 0, lateMin: 0, otMin: 0 };
   }
+
+  const isOvertimeDay = (ds) => {
+    if (!ds) return false;
+    const [y, m, d] = ds.split('-').map(Number);
+    const date = new Date(y, m - 1, d);
+    const day = date.getDay(); // 0 = Sun, 6 = Sat
+    if (day === 0 || day === 6) return true;
+    const holidays = [
+      '2026-01-01', '2026-01-02', '2026-02-25', '2026-04-02', '2026-04-03', 
+      '2026-04-04', '2026-04-09', '2026-05-01', '2026-06-12', '2026-08-21', 
+      '2026-08-31', '2026-11-01', '2026-11-02', '2026-11-30', '2026-12-08', 
+      '2026-12-24', '2026-12-25', '2026-12-30', '2026-12-31'
+    ];
+    return holidays.includes(ds);
+  };
 
   const [inH, inM] = clockIn.split(':').map(Number);
   const [outH, outM] = clockOut.split(':').map(Number);
@@ -48,17 +63,20 @@ const calculateAttendanceRaw = (clockIn, clockOut, status) => {
   const scheduledOutH = 18;
 
   let lateMin = 0;
-  const totalInMins = inH * 60 + inM;
-  const totalScheduledMins = scheduledInH * 60 + scheduledInM;
+  if (!isOvertimeDay(dateStr)) {
+    const totalInMins = inH * 60 + inM;
+    const totalScheduledMins = scheduledInH * 60 + scheduledInM;
+    const lateThresholdMins = totalScheduledMins + 61; // 1 hour and 1 min grace period
 
-  if (totalInMins > totalScheduledMins) {
-    lateMin = totalInMins - totalScheduledMins;
+    if (totalInMins >= lateThresholdMins) {
+      lateMin = totalInMins - (totalScheduledMins + 60); // Late duration starts after 60 mins
+    }
   }
 
   let otMin = 0;
-  if (outH > scheduledOutH || (outH === scheduledOutH && outM > 0)) {
-    otMin = (outH - scheduledOutH) * 60 + outM;
-  }
+  if (isOvertimeDay(dateStr)) {
+    otMin = netMin;
+  } // No overtime for regular weekdays per user request
 
   return { totalMin: netMin, lateMin, otMin };
 };
@@ -136,7 +154,7 @@ export default function ReportsTimeKeeping({ localPhotos }) {
     // 1. Map API records to table format and calculate stats
     let result = records.map(r => {
       // Use the raw metrics from the API if available, otherwise calculate
-      const raw = calculateAttendanceRaw(r.clockIn, r.clockOut, r.status || 'Present');
+      const raw = calculateAttendanceRaw(r.clockIn, r.clockOut, r.status || 'Present', r.date);
       
       return {
         ...r,
@@ -610,6 +628,7 @@ export default function ReportsTimeKeeping({ localPhotos }) {
                   <div className="text-center">{row.overtime}</div>
                   <div className="text-center status-cell">
                     <span className={`status ${(row.status || 'present').replace(/\s+/g, '').toLowerCase()}`}>{row.status || 'Present'}</span>
+                    {row.late !== '-' && <span className="late-badge">LATE</span>}
                   </div>
                 </div>
               ))

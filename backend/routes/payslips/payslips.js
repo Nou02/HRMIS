@@ -54,6 +54,9 @@ module.exports = (state, db) => {
       const basicSalary = grossNum / 2;
       const premium = r.employment_category !== 'Job Order' ? (grossNum * 0.2) / 2 : 0;
       const netBeforeTax = basicSalary + premium + bonus;
+      const tax2 = netBeforeTax * 0.02;
+      const tax3 = netBeforeTax * 0.03;
+      const totalTax = tax2 + tax3;
       const netPay = Number(r.net_pay || 0);
 
       worksheet.getCell('A11').value = basicSalary;  // Basic Salary amount
@@ -62,11 +65,36 @@ module.exports = (state, db) => {
 
       // Deductions values
       worksheet.getCell('C12').value = deductions; // GTECMPC Loan / general deductions
-      worksheet.getCell('C19').value = deductions; // Total Tax Deduction
+      worksheet.getCell('C16').value = tax2;       // Withholding Tax 2%
+      worksheet.getCell('C17').value = tax3;       // Withholding Tax 3%
+      worksheet.getCell('C19').value = totalTax;   // Total Tax Deduction
       worksheet.getCell('C21').value = netPay;     // NET PAY
 
+      // Fetch signatories
+      const [signatoryRows] = await db.query(`
+        SELECT r.role_name, n.name 
+        FROM signatory_roles r
+        JOIN signatory_names n ON r.current_name_id = n.id
+        WHERE r.role_name = 'Administrative Officer II'
+      `);
+      
+      if (signatoryRows.length > 0) {
+        const signatory = signatoryRows[0];
+        const nameCell = worksheet.getCell('B27');
+        const posCell = worksheet.getCell('B28');
+        
+        nameCell.value = signatory.name;
+        posCell.value = signatory.role_name;
+        
+        nameCell.font = { name: 'Arial', size: 10, bold: true };
+        nameCell.alignment = { horizontal: 'center', vertical: 'middle' };
+        
+        posCell.font = { name: 'Arial', size: 10 };
+        posCell.alignment = { horizontal: 'center', vertical: 'middle' };
+      }
+
       // Formatting
-      const currencyCells = ['A11', 'A15', 'C12', 'C14', 'C19', 'C21'];
+      const currencyCells = ['A11', 'A15', 'C12', 'C14', 'C16', 'C17', 'C19', 'C21'];
       currencyCells.forEach(cellAddr => {
         const cell = worksheet.getCell(cellAddr);
         cell.numFmt = '#,##0.00';

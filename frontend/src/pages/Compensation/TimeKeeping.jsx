@@ -37,8 +37,26 @@ const calculateAttendanceRaw = (clockIn, clockOut, status, dateStr, timeInFilter
     return { totalMin: 0, lateMin: 0, otMin: 0 };
   }
 
-  // 1. Calculate Late (only needs clockIn)
-  if (clockIn && clockIn !== '-') {
+  const isOvertimeDay = (ds) => {
+    if (!ds) return false;
+    const [y, m, d] = ds.split('-').map(Number);
+    const date = new Date(y, m - 1, d);
+    const day = date.getDay(); // 0 = Sunday, 6 = Saturday
+    
+    if (day === 0 || day === 6) return true;
+
+    // Standard PH Holidays for 2026
+    const holidays = [
+      '2026-01-01', '2026-01-02', '2026-02-25', '2026-04-02', '2026-04-03', 
+      '2026-04-04', '2026-04-09', '2026-05-01', '2026-06-12', '2026-08-21', 
+      '2026-08-31', '2026-11-01', '2026-11-02', '2026-11-30', '2026-12-08', 
+      '2026-12-24', '2026-12-25', '2026-12-30', '2026-12-31'
+    ];
+    return holidays.includes(ds);
+  };
+
+  // 1. Calculate Late (only needs clockIn) - Skip for weekends/holidays
+  if (clockIn && clockIn !== '-' && !isOvertimeDay(dateStr)) {
     const [inH, inM] = clockIn.split(':').map(Number);
     const totalInMins = inH * 60 + inM;
     
@@ -48,15 +66,15 @@ const calculateAttendanceRaw = (clockIn, clockOut, status, dateStr, timeInFilter
     if (timeInFilter) {
       const [fH, fM] = timeInFilter.split(':').map(Number);
       baseMins = fH * 60 + fM;
-      lateThresholdMins = baseMins + 60; // 1 hour grace period
+      lateThresholdMins = baseMins + 61; // 1 hour and 1 min grace period
     } else {
       const isSevenAmShift = (inH < 7) || (inH === 7 && inM <= 30);
       baseMins = isSevenAmShift ? 420 : 510; // 7:00 AM or 8:30 AM
-      lateThresholdMins = baseMins; // No grace period for default shifts
+      lateThresholdMins = baseMins + 61; // 1 hour and 1 min grace period
     }
 
     if (totalInMins >= lateThresholdMins) {
-      lateMin = totalInMins - baseMins;
+      lateMin = totalInMins - (baseMins + 60); // Late duration starts after 60 mins
     }
   }
 
@@ -85,9 +103,11 @@ const calculateAttendanceRaw = (clockIn, clockOut, status, dateStr, timeInFilter
     if (diffMin > 0) {
       totalMin = Math.max(0, diffMin - 60);
       const scheduledOutH = 18; 
-      if (outH > scheduledOutH || (outH === scheduledOutH && outM > 0)) {
-        otMin = (outH - scheduledOutH) * 60 + outM;
-      }
+      
+      if (isOvertimeDay(dateStr)) {
+        // Entire duration is overtime for weekends/holidays
+        otMin = totalMin;
+      } // No overtime for regular weekdays per user request
     }
   }
 
@@ -518,6 +538,7 @@ export default function TimeKeeping({ localPhotos, setLocalPhotos }) {
                   <div className="text-center">{row.overtime}</div>
                   <div className="text-center status-cell">
                     <span className={`status ${(row.status || 'present').replace(/\s+/g, '').toLowerCase()}`}>{row.status || 'Present'}</span>
+                    {row.late !== '-' && <span className="late-badge">LATE</span>}
                   </div>
                   <div className="text-center action-cell">
                     <button className="btn small edit-btn-table" onClick={() => {

@@ -10,7 +10,11 @@ import {
   FileText, 
   Table, 
   Printer, 
-  ChevronDown 
+  ChevronDown,
+  Settings,
+  Plus,
+  Trash2,
+  X
 } from 'lucide-react';
 
 export default function ReportsCompensation({ localPhotos }) {
@@ -35,6 +39,71 @@ export default function ReportsCompensation({ localPhotos }) {
   const [exportOpen, setExportOpen] = useState(false);
   const [selectedDept, setSelectedDept] = useState(null);
   const exportRef = useRef(null);
+
+  // Signatories state
+  const [signatoriesOpen, setSignatoriesOpen] = useState(false);
+  const [signatoryPool, setSignatoryPool] = useState([]);
+  const [signatoryRoles, setSignatoryRoles] = useState([]);
+  const [newSignatoryName, setNewSignatoryName] = useState('');
+
+  useEffect(() => {
+    if (signatoriesOpen) {
+      fetchSignatories();
+    }
+  }, [signatoriesOpen]);
+
+  const fetchSignatories = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/api/signatories`);
+      const data = await res.json();
+      setSignatoryPool(data.names || []);
+      setSignatoryRoles(data.roles || []);
+    } catch (err) {
+      console.error('Failed to fetch signatories:', err);
+    }
+  };
+
+  const addSignatoryToPool = async () => {
+    if (!newSignatoryName.trim()) return;
+    try {
+      const res = await fetch(`${API_BASE}/api/signatories/pool`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newSignatoryName.trim() })
+      });
+      if (res.ok) {
+        setNewSignatoryName('');
+        fetchSignatories();
+      }
+    } catch (err) {
+      console.error('Failed to add signatory:', err);
+    }
+  };
+
+  const deleteSignatoryFromPool = async (id) => {
+    if (!window.confirm('Are you sure you want to delete this name?')) return;
+    try {
+      const res = await fetch(`${API_BASE}/api/signatories/pool/${id}`, {
+        method: 'DELETE'
+      });
+      if (res.ok) fetchSignatories();
+    } catch (err) {
+      console.error('Failed to delete signatory:', err);
+    }
+  };
+
+  const updateAssignment = async (roleId, nameId) => {
+    try {
+      const res = await fetch(`${API_BASE}/api/signatories/assignments`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ roleId, nameId })
+      });
+      if (res.ok) fetchSignatories();
+    } catch (err) {
+      console.error('Failed to update assignment:', err);
+    }
+  };
 
   const periodOptions = [];
   const now = new Date();
@@ -447,6 +516,9 @@ export default function ReportsCompensation({ localPhotos }) {
               {selectedDept ? `General Payrolls · ${selectedDept}` : 'General Payrolls · Select Department'}
             </div>
             <div className="card-actions" style={{ display: 'flex', gap: '8px' }}>
+              <button className="btn light" onClick={() => setSignatoriesOpen(true)} title="Edit Report Signatories">
+                <Settings size={18} style={{ marginRight: '8px' }} /> Signatories
+              </button>
               <div className="dropdown" ref={exportRef}>
                 <button className="btn primary export-btn" onClick={() => setExportOpen(!exportOpen)}>
                   <FileDown size={18} style={{ marginRight: '8px' }} /> Export <ChevronDown size={16} style={{ marginLeft: '8px' }} />
@@ -553,6 +625,9 @@ export default function ReportsCompensation({ localPhotos }) {
           <div className="card-header overflow-visible">
             <div className="card-title">Preview · Payslips</div>
             <div className="card-actions" style={{ display: 'flex', gap: '8px' }}>
+              <button className="btn light" onClick={() => setSignatoriesOpen(true)} title="Edit Report Signatories">
+                <Settings size={18} style={{ marginRight: '8px' }} /> Signatories
+              </button>
               <div className="dropdown" ref={exportRef}>
                 <button className="btn primary export-btn" onClick={() => setExportOpen(!exportOpen)}>
                   <FileDown size={18} style={{ marginRight: '8px' }} /> Export <ChevronDown size={16} style={{ marginLeft: '8px' }} />
@@ -631,6 +706,73 @@ export default function ReportsCompensation({ localPhotos }) {
                 No generated payslips found. Use Compensation → General Payroll to Process Payroll.
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {signatoriesOpen && (
+        <div className="modal-overlay">
+          <div className="modal-content signatories-modal">
+            <div className="modal-header">
+              <h3>Edit Report Signatories</h3>
+              <button className="close-btn" onClick={() => setSignatoriesOpen(false)}><X size={20} /></button>
+            </div>
+            
+            <div className="modal-body">
+              <div className="signatories-section">
+                <h4>Role Assignments</h4>
+                <p className="section-desc">Assign names to specific roles for the Excel export.</p>
+                <div className="roles-grid">
+                  {signatoryRoles.map(role => (
+                    <div key={role.id} className="role-item">
+                      <label>{role.role_name}</label>
+                      <select 
+                        value={role.current_name_id || ''} 
+                        onChange={(e) => updateAssignment(role.id, e.target.value || null)}
+                      >
+                        <option value="">-- Select Name --</option>
+                        {signatoryPool.map(name => (
+                          <option key={name.id} value={name.id}>{name.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="signatories-section">
+                <h4>Manage Names Pool</h4>
+                <p className="section-desc">Add or remove names available for assignment.</p>
+                
+                <div className="add-name-form">
+                  <input 
+                    type="text" 
+                    placeholder="Enter full name..." 
+                    value={newSignatoryName}
+                    onChange={(e) => setNewSignatoryName(e.target.value)}
+                    onKeyPress={(e) => e.key === 'Enter' && addSignatoryToPool()}
+                  />
+                  <button className="btn primary" onClick={addSignatoryToPool}>
+                    <Plus size={18} /> Add
+                  </button>
+                </div>
+
+                <div className="names-list">
+                  {signatoryPool.map(name => (
+                    <div key={name.id} className="name-tag">
+                      <span>{name.name}</span>
+                      <button className="delete-name-btn" onClick={() => deleteSignatoryFromPool(name.id)}>
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+            
+            <div className="modal-footer">
+              <button className="btn primary" onClick={() => setSignatoriesOpen(false)}>Done</button>
+            </div>
           </div>
         </div>
       )}

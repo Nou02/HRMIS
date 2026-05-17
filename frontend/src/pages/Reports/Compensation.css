@@ -66,6 +66,17 @@
   box-shadow: 0 4px 12px rgba(59, 130, 246, 0.2);
 }
 
+.btn.light {
+  background: #f1f5f9;
+  color: #475569;
+  border-color: #e2e8f0;
+}
+
+.btn.light:hover {
+  background: #e2e8f0;
+  color: #1e293b;
+}
+
 .back-btn-red {
   background-color: var(--danger) !important;
   color: white !important;
@@ -463,4 +474,161 @@
   border-radius: 50%;
   font-size: 20px;
   cursor: pointer;
+}
+
+/* Signatories Modal Styles */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  backdrop-filter: blur(4px);
+}
+
+.signatories-modal {
+  width: 100%;
+  max-width: 600px;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.modal-header {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.modal-header h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.close-btn {
+  background: none !important;
+  border: none !important;
+  color: var(--muted) !important;
+  cursor: pointer !important;
+  padding: 4px !important;
+  border-radius: 4px !important;
+  width: auto !important;
+  height: auto !important;
+  position: static !important;
+}
+
+.close-btn:hover {
+  background: #f1f5f9 !important;
+  color: var(--text) !important;
+}
+
+.modal-body {
+  padding: 20px;
+  overflow-y: auto;
+}
+
+.signatories-section {
+  margin-bottom: 24px;
+}
+
+.signatories-section h4 {
+  margin: 0 0 8px 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.section-desc {
+  font-size: 13px;
+  color: var(--muted);
+  margin-bottom: 16px;
+}
+
+.roles-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+}
+
+.role-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.role-item label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #475569;
+}
+
+.role-item select {
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #fff;
+  font-size: 14px;
+}
+
+.add-name-form {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.add-name-form input {
+  flex: 1;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 14px;
+}
+
+.names-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.name-tag {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #f1f5f9;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 13px;
+  border: 1px solid #e2e8f0;
+}
+
+.delete-name-btn {
+  background: none;
+  border: none;
+  color: var(--danger);
+  cursor: pointer;
+  padding: 2px;
+  display: flex;
+  align-items: center;
+}
+
+.delete-name-btn:hover {
+  background: #fee2e2;
+  border-radius: 50%;
+}
+
+.modal-footer {
+  padding: 16px 20px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  justify-content: flex-end;
 }

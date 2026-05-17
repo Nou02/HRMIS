@@ -116,6 +116,10 @@ export default function GatePass({ localPhotos, setLocalPhotos }) {
     loadEmployees();
   }, []);
 
+  const downloadPass = (row) => {
+    window.open(`${API_BASE}/api/gatepasses/export-xlsx?id=${row.id}`, '_blank');
+  };
+
   const deletePass = (id) => {
     if (!window.confirm("Are you sure you want to delete this gate pass record?")) return;
     fetch(`${API_BASE}/api/gatepasses/${encodeURIComponent(id)}`, {
@@ -386,6 +390,7 @@ export default function GatePass({ localPhotos, setLocalPhotos }) {
                   </span>
                 </div>
                 <div className="activity-cell">
+                  <button className="btn small download-btn" onClick={() => downloadPass(row)} title="Download Gate Pass">Download</button>
                   <button className="btn small edit-btn" onClick={() => openEdit(row)}>Edit</button>
                   {row.status !== 'Approved' && (
                     <button className="btn small approve-btn" onClick={() => approve(row)}>Approve</button>

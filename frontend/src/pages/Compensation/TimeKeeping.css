@@ -297,6 +297,18 @@
 .status.halfday { background: #ffedd5; color: #ff5607; }
 .status.onleave { background: #e0e7ff; color: #3730a3; }
 
+.late-badge {
+  display: inline-block;
+  padding: 2px 6px;
+  background: #fee2e2;
+  color: #ef4444;
+  font-size: 10px;
+  font-weight: 700;
+  border-radius: 4px;
+  margin-left: 8px;
+  vertical-align: middle;
+}
+
 .action-cell {
   display: flex;
   justify-content: center;

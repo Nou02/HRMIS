@@ -19,7 +19,7 @@ module.exports = (state, db) => {
     await db.query(`
       CREATE TABLE IF NOT EXISTS overtime_settings (
         id INT PRIMARY KEY DEFAULT 1,
-        hourly_rate DECIMAL(10,2) NOT NULL DEFAULT 200.00,
+        hourly_rate DECIMAL(10,2) NOT NULL DEFAULT 0.00,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
       )
     `);
@@ -27,7 +27,7 @@ module.exports = (state, db) => {
     try {
       const [settings] = await db.query('SELECT COUNT(*) as cnt FROM overtime_settings');
       if (settings[0].cnt === 0) {
-        await db.query('INSERT INTO overtime_settings (id, hourly_rate) VALUES (1, 200.00)');
+        await db.query('INSERT INTO overtime_settings (id, hourly_rate) VALUES (1, 0.00)');
       }
     } catch (err) {
       console.error('[Overtime] Error ensuring settings:', err);
@@ -75,7 +75,7 @@ module.exports = (state, db) => {
     try {
       await ensureOvertimeTables();
       const [rows] = await db.query('SELECT hourly_rate FROM overtime_settings WHERE id = 1');
-      res.json({ hourlyRate: rows[0]?.hourly_rate || 200 });
+      res.json({ hourlyRate: rows[0]?.hourly_rate || 0 });
     } catch (e) {
       console.error('Overtime rate error:', e);
       res.status(500).json({ error: 'db_error' });
@@ -102,7 +102,7 @@ module.exports = (state, db) => {
     try {
       await ensureOvertimeTables();
       const [rateRows] = await db.query('SELECT hourly_rate FROM overtime_settings WHERE id = 1');
-      const hourlyRate = rateRows[0]?.hourly_rate || 200;
+      const hourlyRate = rateRows[0]?.hourly_rate || 0;
 
       let query = `
         SELECT 
@@ -184,7 +184,7 @@ module.exports = (state, db) => {
     try {
       await ensureOvertimeTables();
       const [rateRows] = await db.query('SELECT hourly_rate FROM overtime_settings WHERE id = 1');
-      const hourlyRate = parseFloat(rateRows[0]?.hourly_rate || 200);
+      const hourlyRate = parseFloat(rateRows[0]?.hourly_rate || 0);
 
       const periodInfo = parsePeriod(period);
       if (!periodInfo) {
@@ -248,7 +248,7 @@ module.exports = (state, db) => {
       const totalHours = parseFloat(sumRows[0]?.totalHours || 0);
 
       const [rateRows] = await db.query('SELECT hourly_rate FROM overtime_settings WHERE id = 1');
-      const hourlyRate = parseFloat(rateRows[0]?.hourly_rate || 200);
+      const hourlyRate = parseFloat(rateRows[0]?.hourly_rate || 0);
 
       res.status(201).json({
         id: result.insertId,
@@ -288,7 +288,7 @@ module.exports = (state, db) => {
       const totalHours = parseFloat(sumRows[0]?.totalHours || 0);
 
       const [rateRows] = await db.query('SELECT hourly_rate FROM overtime_settings WHERE id = 1');
-      const hourlyRate = parseFloat(rateRows[0]?.hourly_rate || 200);
+      const hourlyRate = parseFloat(rateRows[0]?.hourly_rate || 0);
 
       res.json({
         deleted: true,
