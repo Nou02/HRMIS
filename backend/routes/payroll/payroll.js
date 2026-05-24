@@ -198,15 +198,12 @@ module.exports = (state, db) => {
         )
       `);
       
-      // Seed default rate if missing or force to 0 if it's not already 0
       const [rows] = await db.query('SELECT id, hourly_rate FROM overtime_settings WHERE id = 1');
       if (rows.length === 0) {
         await db.query('INSERT INTO overtime_settings (id, hourly_rate) VALUES (1, 0.00)');
-        console.log('DEBUG: Created default overtime settings (₱0/hr)');
       } else if (parseFloat(rows[0].hourly_rate) !== 0) {
         await db.query('UPDATE overtime_settings SET hourly_rate = 0.00 WHERE id = 1');
         await db.query('UPDATE payroll_records SET overtime_amount = 0.00 WHERE overtime_amount != 0');
-        console.log('DEBUG: Forced all overtime rates to 0.00');
       }
 
       // Create overtime_entries (required for summary calculations)
@@ -221,7 +218,7 @@ module.exports = (state, db) => {
           updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
         )
       `);
-      console.log('DEBUG: Ensured overtime_entries table exists');
+
 
     } catch (err) {
       console.error('DEBUG: Failed to ensure overtime tables:', err.message);
@@ -230,9 +227,6 @@ module.exports = (state, db) => {
   ensureOvertimeTables();
 
   router.get('/summary', async (req, res) => {
-    console.log('-------------------------------------------');
-    console.log('DEBUG: GET /summary called');
-    console.log('DEBUG: Query Params:', req.query);
     const q = (req.query.q || '').toString();
     const period = (req.query.period || '').toString();
     const department = (req.query.department || '').toString();
@@ -240,6 +234,7 @@ module.exports = (state, db) => {
     const statusVal = (status === 'undefined' || status === 'null') ? '' : status;
 
     try {
+
       const params = [];
       const whereClauses = [];
 
@@ -382,9 +377,6 @@ module.exports = (state, db) => {
   });
 
   router.get('/records', async (req, res) => {
-    console.log('-------------------------------------------');
-    console.log('DEBUG: GET /records called');
-    console.log('DEBUG: Query Params:', req.query);
     const q = (req.query.q || '').toString();
     const sort = (req.query.sort || '').toString();
     const period = (req.query.period || '').toString();
@@ -394,6 +386,7 @@ module.exports = (state, db) => {
     const onlyGenerated = String(req.query.only_generated || '').toLowerCase() === 'true';
 
     try {
+
       const activePeriod = period || '';
       const params = [];
       const whereClauses = [];
@@ -576,9 +569,8 @@ module.exports = (state, db) => {
     const { employeeId } = req.params; // This is the UID
     const { period } = req.query;
 
-    console.log(`DEBUG: GET /records/${employeeId}?period=${period}`);
-
     try {
+
       const periodPattern = period ? (period.includes('%') ? period : `%${period}%`) : null;
       
       // 1. Try to find a persisted record first
@@ -850,7 +842,6 @@ module.exports = (state, db) => {
       // Get numeric ID from UID
       const [empRows] = await db.query(`SELECT id, employment_category FROM employees WHERE uid = ?`, [employeeId]);
       if (empRows.length === 0) {
-        console.error(`[Payroll Update] Employee not found: ${employeeId}`);
         return res.status(404).json({ error: 'Employee not found' });
       }
       const empId = empRows[0].id;
@@ -899,21 +890,18 @@ module.exports = (state, db) => {
       );
       
       if (existing.length === 0) {
-        console.log(`[Payroll Update] Inserting new record for ${employeeId} in period ${period}`);
         const [result] = await db.query(`
           INSERT INTO payroll_records (employee_id, base_salary, overtime_amount, overtime_hours, deduction, net_pay, status, period)
           VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         `, [empId, baseN, otRateN, otHoursN, dedN, netPay, status, period || '']);
-        console.log(`[Payroll Update] Insert successful, ID: ${result.insertId}`);
       } else {
-        console.log(`[Payroll Update] Updating existing record ${existing[0].id} for ${employeeId} in period ${period}`);
         const [result] = await db.query(`
           UPDATE payroll_records 
           SET base_salary = ?, overtime_amount = ?, overtime_hours = ?, deduction = ?, net_pay = ?, status = ?
           WHERE employee_id = ? AND period = ?
         `, [baseN, otRateN, otHoursN, dedN, netPay, status, empId, period || '']);
-        console.log(`[Payroll Update] Update successful, affected rows: ${result.affectedRows}`);
       }
+
 
       res.json({
         ok: true,

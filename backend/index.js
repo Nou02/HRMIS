@@ -6,13 +6,9 @@ if (fs.existsSync(envPath)) {
   const envResult = dotenv.config({ path: envPath });
   if (envResult.error) {
     console.error('Failed to load .env from:', envPath, envResult.error.message);
-  } else {
-    console.log('.env loaded successfully from:', envPath);
-    console.log('DB_HOST is set to:', process.env.DB_HOST);
   }
-} else {
-  console.log('.env file not found; using environment/default config');
-}
+} 
+
 
 const express = require('express');
 const cors = require('cors');

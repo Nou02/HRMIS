@@ -25,7 +25,6 @@ module.exports = (state, db) => {
     try {
       const [cols] = await db.query('SHOW COLUMNS FROM timekeeping_records LIKE "date"');
       if (cols.length === 0) {
-        console.log('[Timekeeping] Adding date column');
         await db.query('ALTER TABLE timekeeping_records ADD COLUMN date DATE AFTER employee_id');
       }
     } catch (err) {
@@ -34,7 +33,6 @@ module.exports = (state, db) => {
 
     // Migrate existing data to 'date' column if NULL
     try {
-      console.log('[Timekeeping] Migrating data to date column');
       // If we have records where date is null, try to fill it from created_at
       await db.query('UPDATE timekeeping_records SET date = DATE(created_at) WHERE date IS NULL');
     } catch (err) {
@@ -45,13 +43,11 @@ module.exports = (state, db) => {
     try {
       const [indexes] = await db.query('SHOW INDEX FROM timekeeping_records WHERE Key_name = "unique_emp_date_ref"');
       if (indexes.length > 0) {
-        console.log('[Timekeeping] Dropping old unique_emp_date_ref constraint');
         await db.query('ALTER TABLE timekeeping_records DROP INDEX unique_emp_date_ref');
       }
       
       const [cols] = await db.query('SHOW COLUMNS FROM timekeeping_records LIKE "date_ref"');
       if (cols.length > 0) {
-        console.log('[Timekeeping] Dropping old date_ref virtual column');
         await db.query('ALTER TABLE timekeeping_records DROP COLUMN date_ref');
       }
     } catch (err) {
@@ -62,7 +58,6 @@ module.exports = (state, db) => {
     try {
       const [indexes] = await db.query('SHOW INDEX FROM timekeeping_records WHERE Key_name = "unique_emp_date"');
       if (indexes.length === 0) {
-        console.log('[Timekeeping] Adding unique constraint unique_emp_date');
         
         // Remove duplicates based on (employee_id, date) before adding constraint
         await db.query(`
@@ -78,6 +73,7 @@ module.exports = (state, db) => {
     } catch (err) {
       console.error('[Timekeeping] Error ensuring unique_emp_date constraint:', err);
     }
+
   }
 
   function getLocalDate() {
@@ -200,12 +196,11 @@ module.exports = (state, db) => {
       const statusFilter = (req.query.status || '').toString();
       const sort = (req.query.sort || '').toString();
 
-      console.log(`[Timekeeping] Fetching range: ${range}, date: ${date}, month: ${month}, year: ${year}`);
-
       let query = '';
       let params = [];
 
       // 2. Select query based on range
+
       if (range === 'monthly' && month && year) {
         // Monthly View: Show actual logs for the selected month/year
         const startOfMonth = `${year}-${String(month).padStart(2, '0')}-01`;
@@ -326,9 +321,9 @@ module.exports = (state, db) => {
     
     // Ensure we use the date from the request or the current date
     const targetDate = date || getLocalDate();
-    console.log(`[Timekeeping] POST / - Saving record for ${uid} on ${targetDate}`);
     
     const totalMinutes = diffMinutes(clockIn, clockOut);
+
     let overtimeMinutes = 0;
     if (isOvertimeDay(targetDate)) {
       // Entire duration is overtime for weekends/holidays
@@ -405,9 +400,9 @@ module.exports = (state, db) => {
     const { uid } = req.params;
     const { date = null, name, clockIn, clockOut, status = 'Present' } = req.body || {};
     const targetDate = date || getLocalDate();
-    console.log(`[Timekeeping] PUT /${uid} - Updating record for ${targetDate}`);
 
     const idx = timekeepingRecords.findIndex((r) => r.uid === uid && r.date === targetDate);
+
     
     const totalMinutes = diffMinutes(clockIn, clockOut);
       let overtimeMinutes = 0;

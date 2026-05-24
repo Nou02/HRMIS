@@ -9,8 +9,7 @@ module.exports = (state, db) => {
 
   router.get('/export-xlsx', async (req, res) => {
     const { uid, period } = req.query;
-    console.log(`[Payslip Export] Request for UID: ${uid}, Period: ${period}`);
-
+    
     if (!uid || !period) {
       return res.status(400).json({ error: 'UID and Period are required' });
     }
@@ -101,12 +100,12 @@ module.exports = (state, db) => {
         cell.alignment = { horizontal: 'right', vertical: 'middle' };
       });
 
+      const filename = `Payslip_${r.name.replace(/\s+/g, '_')}_${period}.xlsx`;
       res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-      res.setHeader('Content-Disposition', `attachment; filename="Payslip_${r.name.replace(/\s+/g, '_')}_${period}.xlsx"`);
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
 
       await workbook.xlsx.write(res);
       res.end();
-      console.log(`[Payslip Export] Export successful for ${r.name}`);
     } catch (err) {
       console.error('[Payslip Export] Error:', err);
       res.status(500).json({ error: 'Failed to export payslip', details: err.message });
@@ -158,8 +157,6 @@ module.exports = (state, db) => {
       const activePeriod = periodParam || defaultPeriod;
       const periodPattern = activePeriod.includes('%') ? activePeriod : `%${activePeriod}%`;
 
-      console.log(`[Payslips] Fetching for period: ${activePeriod}`);
-
       // Single query to get ALL employees, their saved payslips for THIS period, 
       // AND their latest payroll record (for auto-fill)
       const queryStr = `
@@ -182,7 +179,6 @@ module.exports = (state, db) => {
       `;
 
       const [rows] = await db.query(queryStr, [periodPattern]);
-      console.log(`[Payslips] Found ${rows.length} rows`);
 
       let list = rows.map((r) => {
         // Use saved payslip data if it exists for this period, 
@@ -256,9 +252,8 @@ module.exports = (state, db) => {
     const { uid } = req.params;
     const { period } = req.query;
 
-    console.log(`DEBUG: GET /payslips/${uid}?period=${period}`);
-
     try {
+
       const periodPattern = period ? (period.includes('%') ? period : `%${period}%`) : null;
 
       const [rows] = await db.query(`
@@ -298,18 +293,11 @@ module.exports = (state, db) => {
   });
 
   router.put('/:uid', async (req, res) => {
+    const { uid } = req.params;
+    const { period, gross, bonus, deductions, netPay, confirm = false } = req.body || {};
+
     try {
       await ensurePayslipTable();
-      const { uid } = req.params;
-      const {
-        gross,
-        bonus,
-        deductions,
-        period,
-        confirm = false,
-      } = req.body || {};
-
-      console.log(`[Payslips] PUT /${uid} - Period: ${period}, Confirm: ${confirm}`);
 
       const [ers] = await db.query('SELECT id, name, employment_category FROM employees WHERE uid = ?', [uid]);
       if (ers.length === 0) {
@@ -334,8 +322,6 @@ module.exports = (state, db) => {
           net_pay = VALUES(net_pay),
           status = VALUES(status)
       `, [employee.id, grossN, bonusN, dedN, netN, period, status]);
-
-      console.log(`[Payslips] PUT Success: Saved payslip for ${uid} (ID: ${employee.id}) for period ${period}. Rows affected: ${result.affectedRows}`);
 
       res.json({
         uid,

@@ -14,11 +14,9 @@ module.exports = (db) => {
 
     try {
       if (!fs.existsSync(GATEPASS_TEMPLATE_PATH)) {
-        console.error(`[GatePass Export] Template not found: ${GATEPASS_TEMPLATE_PATH}`);
         return res.status(404).json({ error: 'Template file not found' });
       }
 
-      console.log(`[GatePass Export] Fetching record for ID: ${id}`);
       const [rows] = await db.query(`
         SELECT 
           id, uid, name, 
@@ -38,11 +36,10 @@ module.exports = (db) => {
       `, [id]);
 
       if (rows.length === 0) {
-        console.error(`[GatePass Export] No record found for ID: ${id}`);
         return res.status(404).json({ error: 'Gate Pass not found' });
       }
       const g = rows[0];
-      console.log(`[GatePass Export] Found record for: ${g.name}`);
+
 
       const workbook = new ExcelJS.Workbook();
       await workbook.xlsx.readFile(GATEPASS_TEMPLATE_PATH);
@@ -89,120 +86,38 @@ module.exports = (db) => {
         throw new Error('No worksheets found in template');
       }
 
-      // Helper for 12h time format
-      const format12h = (t) => {
-        if (!t) return '';
-        try {
-          const parts = String(t).split(':');
-          if (parts.length < 2) return String(t);
-          let hrs = parseInt(parts[0]);
-          const ampm = hrs >= 12 ? 'PM' : 'AM';
-          hrs = hrs % 12 || 12;
-          return `${hrs}:${parts[1]} ${ampm}`;
-        } catch (e) {
-          return String(t);
-        }
-      };
+      // Section 1: Name, Office, Date
+      worksheet.getCell('C7').value = g.name || '';
+      worksheet.getCell('C8').value = 'Office of the Regional Director'; // Static or from DB if available
+      worksheet.getCell('C9').value = g.date || '';
 
-      // Helper to set checkboxes in Column C
-      const setCheck = (row, isChecked) => {
-        try {
-          const cell = worksheet.getCell(`C${row}`);
-          // Use standard characters and avoid complex formatting during cleaning
-          cell.value = isChecked ? '☑' : '☐';
-          cell.font = { name: 'Arial Unicode MS', size: 12 };
-          cell.alignment = { horizontal: 'center', vertical: 'middle' };
-        } catch (e) {
-          console.error(`[GatePass Export] Error setting check at C${row}:`, e);
-        }
-      };
+      // Section 2: Official vs Personal
+      if (g.officialType) {
+        worksheet.getCell('C11').value = '✔'; 
+        worksheet.getCell('E11').value = g.officialType;
+        worksheet.getCell('E12').value = g.officialPurpose || '';
+      } else {
+        worksheet.getCell('C13').value = '✔';
+        worksheet.getCell('E13').value = g.personalType || '';
+        worksheet.getCell('E14').value = g.personalPurpose || '';
+      }
 
-      const fillSection = (offset, isHR = false) => {
-        // Official
-        setCheck(14 + offset, g.officialType === 'Travel');
-        if (g.officialType === 'Travel') {
-          const cell = worksheet.getCell(`I${14 + offset}`);
-          cell.value = g.officialPurpose || '';
-          cell.alignment = { horizontal: 'left', vertical: 'bottom' };
-          cell.font = { name: 'Arial', size: 10 };
-        }
-        
-        setCheck(15 + offset, g.officialType === 'Seminar/Training/Conference/Meeting');
-        setCheck(16 + offset, g.officialType === 'Pick-up of Documents');
-        setCheck(17 + offset, g.officialType === 'Others');
-        if (g.officialType === 'Others') {
-          const cell = worksheet.getCell(`I${17 + offset}`);
-          cell.value = g.officialPurpose || '';
-          cell.alignment = { horizontal: 'left', vertical: 'bottom' };
-          cell.font = { name: 'Arial', size: 10 };
-        }
+      // Section 3: Destination
+      worksheet.getCell('E15').value = g.venue || '';
 
-        // Personal
-        setCheck(21 + offset, g.personalType === "Medication/ Physical Check-up (subject to presentation of Doctor's Certification)");
-        setCheck(22 + offset, g.personalType === "Medical Attention to Family Member/ Relative");
-        setCheck(23 + offset, g.personalType === "Others");
-        if (g.personalType === "Others") {
-          const cell = worksheet.getCell(`I${23 + offset}`);
-          cell.value = g.personalPurpose || '';
-          cell.alignment = { horizontal: 'left', vertical: 'bottom' };
-          cell.font = { name: 'Arial', size: 10 };
-        }
+      // Section 4: Time (Estimated)
+      worksheet.getCell('E17').value = g.estStartTime || '';
+      worksheet.getCell('G17').value = g.estEndTime || '';
 
-        // Times and Venue - HR Copy has slightly different mapping in template
-        if (isHR) {
-          worksheet.getCell(`E${64}`).value = g.date || '';
-          worksheet.getCell(`L${64}`).value = format12h(g.estStartTime);
-          worksheet.getCell(`N${64}`).value = format12h(g.estEndTime);
-          worksheet.getCell(`E${66}`).value = g.venue || '';
-        } else {
-          worksheet.getCell(`E${25 + offset}`).value = g.date || '';
-          worksheet.getCell(`L${25 + offset}`).value = format12h(g.estStartTime);
-          worksheet.getCell(`N${25 + offset}`).value = format12h(g.estEndTime);
-          worksheet.getCell(`E${27 + offset}`).value = g.venue || '';
-        }
+      // Section 5: Signature
+      worksheet.getCell('C22').value = g.name || '';
+      worksheet.getCell('C24').value = g.approvedBy || '';
 
-        // Approver and Employee
-        if (isHR) {
-          // HR Copy signatures at row 75, centered above the line
-          const approverCell = worksheet.getCell(`C75`);
-          approverCell.value = g.approvedBy || '';
-          approverCell.alignment = { horizontal: 'center', vertical: 'bottom' };
-          approverCell.font = { name: 'Arial', size: 10, bold: true };
-
-          const employeeCell = worksheet.getCell(`K75`);
-          employeeCell.value = g.name || '';
-          employeeCell.alignment = { horizontal: 'center', vertical: 'bottom' };
-          employeeCell.font = { name: 'Arial', size: 10, bold: true };
-        } else {
-          // Personal Copy signatures at row 34, above the underline
-          const approverCell = worksheet.getCell(`C${34}`);
-          approverCell.value = g.approvedBy || '';
-          approverCell.alignment = { horizontal: 'center', vertical: 'bottom' };
-          approverCell.font = { name: 'Arial', size: 10, bold: true };
-
-          const employeeCell = worksheet.getCell(`K${34}`);
-          employeeCell.value = g.name || '';
-          employeeCell.alignment = { horizontal: 'center', vertical: 'bottom' };
-          employeeCell.font = { name: 'Arial', size: 10, bold: true };
-        }
-      };
-
-      console.log(`[GatePass Export] Filling worksheet sections...`);
-      fillSection(0, false);  // Personal Copy
-      fillSection(39, true);  // HR Copy (14 + 39 = 53 for checkboxes)
-
-      console.log(`[GatePass Export] Generating buffer...`);
       const buffer = await workbook.xlsx.writeBuffer();
+      const filename = `GatePass_${g.name.replace(/\s+/g, '_')}_${g.date}.xlsx`;
       
-      const safeName = String(g.name || 'Employee').replace(/[^a-z0-9]/gi, '_');
-      const safeDate = String(g.date || 'download').replace(/[^a-z0-9]/gi, '_');
-      const filename = `GatePass_${safeName}_${safeDate}.xlsx`;
-
       res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
       res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-      res.setHeader('Content-Length', buffer.length);
-      
-      console.log(`[GatePass Export] Sending file: ${filename} (${buffer.length} bytes)`);
       res.send(buffer);
     } catch (err) {
       console.error('[GatePass Export] FATAL ERROR:', err);

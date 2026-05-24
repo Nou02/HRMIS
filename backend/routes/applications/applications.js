@@ -191,9 +191,8 @@ module.exports = (db) => {
       requestDate,
     } = req.body || {};
 
-    console.log('POST /api/applications body:', req.body);
-
     if (!uid || !name || !typeOfLeave) {
+
       return res.status(400).json({ error: 'uid, name, and typeOfLeave are required' });
     }
 
@@ -256,9 +255,8 @@ module.exports = (db) => {
       requestDate,
     } = req.body || {};
 
-    console.log('PUT /api/applications body:', req.body);
-
     const hours = typeof offsetHours === 'undefined' ? null : Number(offsetHours || 0);
+
     if (hours !== null && hours !== 0 && hours !== 4 && hours !== 8) {
       return res.status(400).json({ error: 'Off-set hours must be exactly 4 or 8' });
     }
