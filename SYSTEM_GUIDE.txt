@@ -1,0 +1,57 @@
+================================================================================
+          HRMIS SYSTEM - SETUP AND OPERATION GUIDE
+================================================================================
+
+1. DATABASE SETUP (Using XAMPP)
+--------------------------------------------------------------------------------
+   a. Open XAMPP Control Panel and Start "Apache" and "MySQL".
+   b. Click the "Admin" button next to MySQL to open phpMyAdmin in your browser.
+   c. Click "New" on the left sidebar to create a new database.
+   d. Name the database: hrmis
+   e. Click the "Import" tab at the top.
+   f. Click "Choose File" and select:
+      \backend\database.sql
+   g. Click "Go" at the bottom to create all necessary tables.
+
+2. ADDING DUMMY DATA
+--------------------------------------------------------------------------------
+   a. While still in phpMyAdmin with the "hrmis" database selected:
+   b. Click the "Import" tab again.
+   c. Click "Choose File" and select:
+      \backend\dummy_data.sql
+   d. Click "Go". This will populate the system with:
+      - Admin account
+      - Sample employees
+      - Payroll and Payslip records
+      - Overtime settings
+
+3. ADMIN ACCOUNT CREDENTIALS
+--------------------------------------------------------------------------------
+   Username: admin
+   Password: admin123
+
+4. STARTING THE SYSTEM
+--------------------------------------------------------------------------------
+   Option A (Recommended):
+   - Navigate to the root folder (HRMIS).
+   - Double-click the file: run-system.bat
+   - This will automatically start both the Backend and Frontend.
+
+   Option B (Manual):
+   - Open a terminal in the root folder and run: npm start
+
+   The system will be available at:
+   - Frontend: http://localhost:5173
+   - Backend API: http://localhost:5176
+
+5. OPERATING THE SYSTEM
+--------------------------------------------------------------------------------
+   - Login: Use the Admin credentials above.
+   - Payroll: Go to Compensation > General Payrolls to process monthly salaries.
+   - Timekeeping: Go to Compensation > Time Keeping to manage daily logs.
+   - 201 Files: Go to Employee Directory to view and manage employee profiles.
+   - Requests: Manage leave and off-set requests in the Requests section.
+
+================================================================================
+      Note: Ensure Node.js is installed on your machine before starting.
+================================================================================
